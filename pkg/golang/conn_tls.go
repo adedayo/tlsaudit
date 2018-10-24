@@ -19,7 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/adedayo/net/tlsaudit/pkg/model"
+	"github.com/adedayo/tlsaudit/pkg/model"
 )
 
 // A Conn represents a secured connection.

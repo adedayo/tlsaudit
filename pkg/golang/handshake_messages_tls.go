@@ -6,8 +6,9 @@ package gotls
 
 import (
 	"bytes"
-	"github.com/adedayo/net/tlsaudit/pkg/model"
 	"strings"
+
+	"github.com/adedayo/tlsaudit/pkg/model"
 )
 
 type clientHelloMsg struct {

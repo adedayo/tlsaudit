@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/adedayo/cidr"
-	tlsaudit "github.com/adedayo/net/tlsaudit/pkg"
-	"github.com/adedayo/net/tlsaudit/pkg/model"
+	tlsaudit "github.com/adedayo/tlsaudit/pkg"
+	"github.com/adedayo/tlsaudit/pkg/model"
 	"gopkg.in/urfave/cli.v2"
 )
 

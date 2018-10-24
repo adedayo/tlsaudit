@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/adedayo/net/tlsaudit/pkg/golang"
-	"github.com/adedayo/net/tlsaudit/pkg/model"
 	"github.com/adedayo/tcpscan"
+	"github.com/adedayo/tlsaudit/pkg/golang"
+	"github.com/adedayo/tlsaudit/pkg/model"
 )
 
 var (

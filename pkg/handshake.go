@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adedayo/net/tlsaudit/pkg/golang"
-	"github.com/adedayo/net/tlsaudit/pkg/model"
+	"github.com/adedayo/tlsaudit/pkg/golang"
+	"github.com/adedayo/tlsaudit/pkg/model"
 )
 
 // HandShakeUpToKeyExchange starts the handshake up till the acquisition of server key exchanges
