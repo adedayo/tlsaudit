@@ -18,6 +18,8 @@ deploy:
   provider: releases
   api_key:
     secure: MZGCZTWYOEBOra64CCxY+VX+FfukaIib8fzjcwzVS1s9e05KM+Ejcg2Mhe+kufv4pWzl1Fpg9aZm2dC/Yll6ip+5bWNUvITfiIsJO8JcuTCjaJ+uqwRC35tJPkCdU09/JeAH45pMdmDNBcFr2RH48Qa5SMvuEUTNBYqh8kOOZzhr24tibf+rPUPOOtLc22oQzzAAsKgtqOgQgW4bINslKRMiXGoT8Yy1Qkt7u51PKf0gBMBrA/QZOKg3WTSMIdgcDXgl/aYuY+3JohqLD7gTsP7DLOifJxNg4Zfqtcq5ZDUGrmdlTB91Oa5CqsE0jw/UbakvM2uViMZN01GTpsmmcxfb8AocL+ZL945VZlMa/kvALKB7Hg94oeUwQNCwZ3ZR9Ww9uU5WQQWdF7lq1lSJmqthfuE3bq0s0yIaOOtEOjhQeGrnnNJWO0nZ1ccbzi3h0+qLJ5wN1qa6KdROzpK/uaTLlPGFW4nb8uOds202pkzJXRI6x9s5wUWs15KUIClu+sWFR7GkJ/Tns66sj5MQQ1/wwGrX+5QtU5yCD1xB/+6vCgfy/E40grCqWreSOhjkOyXPRMerur1YhSxI269Fp14GT0twN3SmU0HIIhcaL7PgR2crKSp9zVDDPgb9FDY/W1VUXfWBdt7aGtLu5lMAcNdH3Mkk1t9QmMisInKGUoU=
+  file_glob: true
   file: tlsaudit*.tar.gz
+  skip_cleanup: true
   on:
-    repo: adedayo/tlsaudit
+    tags: true
