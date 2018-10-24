@@ -6,20 +6,21 @@ before_install:
 - sudo apt-get install git cmake flex bison
 - export PCAP_VERSION=1.9.0
 - wget https://github.com/the-tcpdump-group/libpcap/archive/libpcap-$PCAP_VERSION.tar.gz
-- mkdir libpcap 
+- mkdir libpcap
 - tar xzf libpcap-$PCAP_VERSION.tar.gz -C libpcap --strip-components 1
 - pushd libpcap
 - cmake . && make && sudo make install
 - popd
 - go get ./...
 script:
-  - make
+- make
 deploy:
   provider: releases
-  api_key:
-    secure: gECiYO8LFe749Hi44TRCrigHs7Ryf0mZB1IcCCXM6XE2c9nzalydqpNfGMmqNez5ddBVcHWj+E6CxtRBm1taFdSjrAxq5D0IOyv3HqrpowpdtahX8OIC08OThiM5LPQh5ch66bayKd5v8Lemspzc6SnRj3Qti6yv5OsTc7/ccIioJHJQ3kFhXE2Lr1hT2UKQHk/SrAjDX5mtId1CmJOq5VyQo5q/r2XSGjZyILgfE0d6rG3qHmIA5p9rw9uJYArZcQAmUXBQbBIcIWBeMYd8cLQu8nXia48M298c1zEGHaKMZflhWNFlfDxIPXb12hcfqAKY0q5GjzvIiQSdgaaoQiIoDOAFqg76nhNBsFMWyDvwaqC8NzSbNIEG35jslquqFa8qvjSwP26vHR8gV/fW60q6z0SkOK+/3lkejUvUYI7fOu1UCCHnXXsHI77ojSKeO+dXQotNYdOijWUATmrh0mrpEfLyK3nho61TVuDYjLsGwR6gZTFQV+jniHX1pTsnBTFPs7KFz8jyn5FXvG4vKcLeZAmc7JVaiZjo4TYVn77ApRvNI6llsvlxuhGP6orfwV92/XGbhjF2t6TlU88gvTwb6FrXaS3FqWTzMmrCERelcrdY0RvjPk4863xHvGJWWsPx2QuOZ4Hgn/w2QbDezfSreYNNc2LVQ6b6wTWVs9E=
   file_glob: true
   file: tlsaudit*.tar.gz
   skip_cleanup: true
   on:
     tags: true
+env:
+  global:
+    secure: ViQza1CDUDww9KLMJuGYu3P9XQVLZE5f039XUEWTzeBOJ9UUKNKvE9h3n+3YlogfXkjyTgscPQ17nO6qGm9LQwYn40LM6XaXz25TzkJOZBg8v9PTq3wi3JJTpzQl4wjT0xYo5Awi2R1NYWk0ZLAiQuFhy3wCf8F5NYcrb4oIUDwwMDmbluZhWc4Ui2yQsU06Jx4dtH4Nb2h5r7kAHNk/RkQ/2/MlC+RRitMOnaCAkjgTuPKtbUG7GiI/Yzktjo1BPYVzJPoAVtV4rSPs/5fizGkLizo/Qo6RAKk4XmeeuoYEXlFM7zko0ayPOiDrYb/aPKfHO+vzPmwspBp6eQQSWsl/kOFI+CTQ/KwjL+j1KnWcNIuMstbPm+kyJTuM21lZ7IPr7HUhNalW90IW3DB8TF5F6ercvnSALS1aN8ABsTIsKvD8wc04NN/2NLNv7PuOYHy3WFSXnd2zmUad3cRXwmheIMwI5+y+c3BQLizFUUY/P1Puxm5OdjPgom8U67r+AHUJxiTCLtutDcfm4JvKv7hcWAQA5v3+ZZJH6XZbiZSw0FzOXHlk53PHQiApqhwjp/4gTvDO2NXDfRTt+J7oKV0p/YNZD2CvG6Ka1mBvcff8gEFZy+D3wETAnq+L7xdGympJDa9ObfMGFkNNX9FXYrygmQtMaVCk550tVpVEl50=
