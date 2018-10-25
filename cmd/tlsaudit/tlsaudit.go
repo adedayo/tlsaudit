@@ -316,37 +316,3 @@ func (k sorter) Less(i, j int) bool {
 	jPort, _ := strconv.Atoi(k[j].Port)
 	return k[i].Server < k[j].Server || (k[i].Server == k[j].Server && iPort <= jPort)
 }
-
-// func main() {
-
-// 	// tls.Client()
-// 	// httptrace.ClientTrace().TLSHandshakeStart()
-// 	// host := "195.130.217.190"
-
-// 	// host := "eportal.oauife.edu.ng"
-// 	// host := "bbc.co.uk"
-// 	// host := "mimecast.com"
-// 	host := "api.mimecast.com"
-// 	// host := "mail.google.com"
-// 	// host := "google.com"
-// 	// host := "eu-smtp-inbound-1.mimecast.com"
-// 	// host := "8.8.8.8"
-// 	// port := "443"
-
-// 	// for _, add := range addrs {
-// 	// 	println(add)
-// 	// }
-
-// 	// results := tlsaudit.ScanHosts([]tlsmodel.HostAndPort{
-// 	// 	{
-// 	// 		Hostname: host,
-// 	// 		Port:     port,
-// 	// 	},
-// 	// })
-
-// 	results := tlsaudit.ScanHostTLS(host)
-
-// 	for result := range results {
-// 		fmt.Printf("%s, %s \n===============\n%s\n", result.Server, result.Port, result.String())
-// 	}
-// }
