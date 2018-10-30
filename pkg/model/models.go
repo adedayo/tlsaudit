@@ -154,7 +154,7 @@ func addCurve(protocol, cipher uint16, scan ScanResult) string {
 			}
 		}
 	}
-	return CipherSuiteMap[cipher] + curveID
+	return fmt.Sprintf("%s (0x%x) %s", CipherSuiteMap[cipher], cipher, curveID)
 
 }
 
