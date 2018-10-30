@@ -9,6 +9,63 @@ import (
 	"strings"
 )
 
+//CipherConfig extracts the important elements of a Ciphersuit based on its name
+type CipherConfig struct {
+	Cipher         string
+	KeyExchange    string
+	Authentication string
+	IsExport       bool
+	Encryption     string
+	MAC            string
+}
+
+//IsAuthenticated returns whether the cipher supports authentication
+func (cc *CipherConfig) IsAuthenticated() bool {
+	return cc.Authentication == "NULL" || cc.Authentication == "anon"
+}
+
+//GetCipherConfig extracts a `CipherConfig` from the Cipher's string name
+// does some basic sanity checks and returns an error if the input cipher name is not sane
+func GetCipherConfig(cipher string) (config CipherConfig, err error) {
+	config.Cipher = cipher
+	if cipher == "TLS_EMPTY_RENEGOTIATION_INFO_SCSV" || cipher == "TLS_FALLBACK_SCSV" {
+		return
+	}
+	cipher = strings.TrimPrefix(cipher, "TLS_")
+	cs := strings.Split(cipher, "_WITH_")
+	if len(cs) != 2 {
+		return config, fmt.Errorf("Expects a cipher name that contains _WITH_ but got %s", config.Cipher)
+	}
+	kxAuth, encMAC := cs[0], cs[1]
+	config.IsExport = strings.Contains(kxAuth, "EXPORT")
+	ka := strings.Split(kxAuth, "_")
+	if len(ka) == 1 {
+		config.KeyExchange = ka[0]
+		config.Authentication = ka[0]
+	}
+	if len(ka) >= 2 {
+		if ka[1] == "EXPORT" {
+			config.KeyExchange = kxAuth
+			config.Authentication = kxAuth
+		} else {
+			config.KeyExchange = ka[0]
+			config.Authentication = ka[1]
+		}
+	}
+
+	em := strings.Split(encMAC, "_")
+	m := em[len(em)-1]
+	if strings.Contains(m, "SHA") || strings.Contains(m, "MD5") {
+		config.MAC = m
+		config.Encryption = strings.Join(em[:len(em)-1], "_")
+		// } else {
+		// 	return config, fmt.Errorf("Could not determine encryption algorithm. Got %s", encMAC)
+		// }
+	}
+
+	return
+}
+
 //ScanConfig describes details of how the TLS scan should be carried out
 type ScanConfig struct {
 	ProtocolsOnly bool
