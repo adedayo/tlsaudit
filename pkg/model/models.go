@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -16,12 +17,43 @@ type CipherConfig struct {
 	Authentication string
 	IsExport       bool
 	Encryption     string
-	MAC            string
+	MACPRF         string //MAC (TLS <=1.1) or PseudoRandomFunction (TLS >= 1.2)
 }
 
 //IsAuthenticated returns whether the cipher supports authentication
 func (cc *CipherConfig) IsAuthenticated() bool {
-	return cc.Authentication == "NULL" || cc.Authentication == "anon"
+	return !(cc.Authentication == "NULL" || cc.Authentication == "anon")
+}
+
+//GetEncryptionKeyLength returns the effective key lengths of encryption algorithms used in the cipher
+//See https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-57pt1r4.pdf for details
+func (cc *CipherConfig) GetEncryptionKeyLength() int {
+	kl := -1 //key length
+	enc := cc.Encryption
+	switch {
+	case enc == "NULL" || cc.Cipher == "TLS_EMPTY_RENEGOTIATION_INFO_SCSV" || cc.Cipher == "TLS_FALLBACK_SCSV":
+		kl = 0
+	case strings.Contains(enc, "3DES"):
+		kl = 112
+	case strings.Contains(enc, "DES40") || strings.Contains(enc, "CBC_40"):
+		kl = 40
+	case enc == "DES_CBC":
+		kl = 56
+	case enc == "SEED_CBC" || enc == "IDEA_CBC": //see https://tools.ietf.org/html/rfc4269 for SEED.
+		kl = 128
+	case enc == "CHACHA20_POLY1305": //see https://tools.ietf.org/html/rfc7539#section-4
+		kl = 256
+	case len(strings.Split(enc, "_")) >= 2:
+		k := strings.Split(enc, "_")[1]
+		kk, err := strconv.Atoi(k)
+		if err != nil {
+			println(err.Error())
+			kl = -1
+		} else {
+			kl = kk
+		}
+	}
+	return kl
 }
 
 //GetCipherConfig extracts a `CipherConfig` from the Cipher's string name
@@ -55,12 +87,14 @@ func GetCipherConfig(cipher string) (config CipherConfig, err error) {
 
 	em := strings.Split(encMAC, "_")
 	m := em[len(em)-1]
-	if strings.Contains(m, "SHA") || strings.Contains(m, "MD5") {
-		config.MAC = m
+	if strings.Contains(m, "SHA") || strings.Contains(m, "MD5") || m == "NULL" {
+		config.MACPRF = m
 		config.Encryption = strings.Join(em[:len(em)-1], "_")
 		// } else {
 		// 	return config, fmt.Errorf("Could not determine encryption algorithm. Got %s", encMAC)
 		// }
+	} else {
+		config.Encryption = encMAC
 	}
 
 	return
@@ -199,7 +233,6 @@ type HumanScanResult struct {
 }
 
 func addCurve(protocol, cipher uint16, scan ScanResult) string {
-
 	curveID := ""
 	if c, ok := scan.KeyExchangeByProtocolByCipher[protocol]; ok {
 		if ex, ok := c[cipher]; ok {
@@ -212,7 +245,6 @@ func addCurve(protocol, cipher uint16, scan ScanResult) string {
 		}
 	}
 	return fmt.Sprintf("%s (0x%x) %s", CipherSuiteMap[cipher], cipher, curveID)
-
 }
 
 //ToStringStruct returns a string-decoded form of ScanResult
@@ -275,7 +307,6 @@ func (s ScanResult) ToStringStruct() (out HumanScanResult) {
 
 //ToJSON returns a JSON-formatted string representation of the ScanResult
 func (s ScanResult) ToJSON() (js string) {
-
 	return
 }
 
