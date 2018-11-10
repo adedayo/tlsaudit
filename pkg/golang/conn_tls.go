@@ -985,7 +985,7 @@ func (c *Conn) ReadServerCertificate() (tlsmodel.CertificateMessage, error) {
 	return cert.Export(), nil
 }
 
-//ReadServerKeyExchange does exactly what it says - skips certificate
+//ReadServerKeyExchange does exactly what it says - skips certificate/certificate status messages
 //--introduced by dayo
 func (c *Conn) ReadServerKeyExchange() (tlsmodel.ServerKeyExchangeMsg, error) {
 
@@ -994,14 +994,15 @@ func (c *Conn) ReadServerKeyExchange() (tlsmodel.ServerKeyExchangeMsg, error) {
 	// if err != nil {
 	// 	return hello, keyExchangeMsg, err
 	// }
-	crt, err := c.readHandshake()
+	msg, err := c.readHandshake()
 	if err != nil {
 		return keyExchangeMsg, err
 	}
-	_, ok := crt.(*certificateMsg)
+
+	_, ok := msg.(*certificateMsg)
 	if !ok {
 		//if the certificate is optional, test whether we got a key exchange message :-s
-		kx, ok := crt.(*serverKeyExchangeMsg)
+		kx, ok := msg.(*serverKeyExchangeMsg)
 		if ok {
 			return kx.Export(), nil
 		}
@@ -1009,12 +1010,26 @@ func (c *Conn) ReadServerKeyExchange() (tlsmodel.ServerKeyExchangeMsg, error) {
 	}
 
 	//we got a cert, try to read server key exchange
-	kxchg, err := c.readHandshake()
+	msg, err = c.readHandshake()
 	if err != nil {
 		return keyExchangeMsg, err
 	}
 
-	keyExchange, ok := kxchg.(*serverKeyExchangeMsg)
+	//we could have gotten a certificate status message at this point for OCSP-stapled certs
+	_, ok = msg.(*certificateStatusMsg)
+	if !ok {
+		//if not a cert status, check we got our key exchange
+		kx, ok := msg.(*serverKeyExchangeMsg)
+		if ok {
+			return kx.Export(), nil
+		}
+		return keyExchangeMsg, errors.New("Weird error: neither cert/cert status nor key exchange message was sent by server after server hello")
+	}
+	msg, err = c.readHandshake()
+	if err != nil {
+		return keyExchangeMsg, err
+	}
+	keyExchange, ok := msg.(*serverKeyExchangeMsg)
 	if !ok {
 		return keyExchangeMsg, errors.New(tlsmodel.NkxErrorMessage)
 	}

@@ -123,7 +123,7 @@ func process(c *cli.Context) error {
 	for x := range uniqueArgsMap {
 		args = append(args, x)
 	}
-	fmt.Printf("TLS Audit (v %s)\nScanning: %s\n", version, strings.Join(args, ", "))
+	fmt.Printf("Starting TLSAudit %s (https://github.com/adedayo/tlsaudit)\nScanning: %s\n", version, strings.Join(args, ", "))
 	config := tlsmodel.ScanConfig{
 		ProtocolsOnly:    c.Bool("protocols-only"),
 		Timeout:          c.Int("timeout"),

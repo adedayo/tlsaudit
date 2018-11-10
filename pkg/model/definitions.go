@@ -48,6 +48,52 @@ var (
 		65282: "arbitrary_explicit_char2_curves",
 	}
 
+	//NamedCurveStrength maps named eliptic curve to comparable RSA length
+	//For comparable strengths of EC named curves see
+	//1. https://www.ietf.org/rfc/rfc5114.txt (see section 4, security considerations)
+	//2. https://www.ietf.org/rfc/rfc5480.txt and
+	//3. pp 133 https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-56Ar3.pdf
+	NamedCurveStrength = map[uint16]int{
+		0:     -1,
+		1:     -1,
+		2:     -1,
+		3:     -1,
+		4:     -1,
+		5:     -1,
+		6:     -1,
+		7:     -1,
+		8:     -1,
+		9:     -1,
+		10:    -1,
+		11:    -1,
+		12:    -1,
+		13:    -1,
+		14:    -1,
+		15:    -1,
+		16:    -1,
+		17:    -1,
+		18:    -1,
+		19:    1024,
+		20:    2048,
+		21:    2048,
+		22:    3072, //caveats about the security of Koblitz curves vs e.g comparable r1 (no. 23)
+		23:    3072,
+		24:    7680,
+		25:    15360,
+		26:    3072,
+		27:    7680,
+		28:    15360,
+		29:    3072, //see https://tools.ietf.org/html/rfc7748#section-7
+		30:    7680, //~224 bit security (https://tools.ietf.org/html/rfc7748#section-7), but 192 < 224 < 256 hence 192 strength chosen using data from section 7 of https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Module-Validation-Program/documents/fips140-2/FIPS1402IG.pdf
+		256:   2048,
+		257:   3072,
+		258:   4096,
+		259:   6144,
+		260:   8192,
+		65281: -1,
+		65282: -1,
+	}
+
 	// CipherSuiteMap - list of ciphersuites based on: http://www.iana.org/assignments/tls-parameters/tls-parameters.xml
 	// For CSV: https://www.iana.org/assignments/tls-parameters/tls-parameters-4.csv
 	// reserved/unknown items are excluded.
@@ -391,14 +437,21 @@ var (
 	// AllCipherSuites is the numerical values of the ciphersuites
 	AllCipherSuites []uint16
 
+	//VersionSSL20 is the protocol code of SSL v2.0
+	VersionSSL20 uint16 = 0x0002
+
+	//VersionTLS13 is the protocol code of TLS v1.3 see https://datatracker.ietf.org/doc/rfc8446
+	VersionTLS13 uint16 = 0x0304
 	//TLSVersions an array of supported TLS versions
-	TLSVersions = []uint16{tls.VersionTLS12, tls.VersionTLS11, tls.VersionTLS10, tls.VersionSSL30}
+	TLSVersions = []uint16{VersionSSL20, tls.VersionSSL30, tls.VersionTLS10, tls.VersionTLS11, tls.VersionTLS12}
 	//TLSVersionMap a mapping from TLS version to a string representation
 	TLSVersionMap = map[uint16]string{
+		VersionSSL20:     "SSL v2.0",
 		tls.VersionSSL30: "SSL v3.0",
 		tls.VersionTLS10: "TLS v1.0",
 		tls.VersionTLS11: "TLS v1.1",
 		tls.VersionTLS12: "TLS v1.2",
+		VersionTLS13:     "TLS v1.3",
 	}
 
 	//AllALPNProtos Application Layer Protocol Negotiation. See defined list at https://tools.ietf.org/html/rfc7301#section-6
@@ -416,7 +469,9 @@ func init() {
 func GetAllCipherSuiteNumbers() []uint16 {
 	keys := make([]uint16, 0, len(CipherSuiteMap))
 	for k := range CipherSuiteMap {
-		keys = append(keys, k)
+		if k != 0x5600 { // exclude TLS_FALLBACK_SCSV
+			keys = append(keys, k)
+		}
 	}
 	return keys
 }

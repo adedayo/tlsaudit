@@ -16,7 +16,6 @@ func HandShakeUpToKeyExchange(hostname string, config *gotls.Config, startTLS bo
 	serverHello := tlsmodel.ServerHelloMessage{}
 	c := &gotls.Conn{}
 	if startTLS {
-		// dialer := new(net.Dialer)
 		rawConn2, err := net.DialTimeout("tcp", hostname, timeout)
 		if err != nil {
 			return hk, err
@@ -29,7 +28,6 @@ func HandShakeUpToKeyExchange(hostname string, config *gotls.Config, startTLS bo
 		}
 		c = gotls.MakeClientConnection(rawConn2, config)
 	} else {
-		// dialer := new(net.Dialer)
 		rawConn, err := net.DialTimeout("tcp", hostname, timeout)
 		if err != nil {
 			return hk, err
@@ -141,7 +139,6 @@ func HandShakeClientHelloGetServerCert(hostname string, config *gotls.Config, ti
 
 		if err != nil {
 			//If ServerHello fails, check STARTTLS
-			// dialer := new(net.Dialer)
 			rawConn2, err := net.DialTimeout("tcp", hostname, timeout)
 			if err != nil {
 				hs <- ServerHelloAndCert{ServerHello: serverHello, Cert: certs, Err: err}

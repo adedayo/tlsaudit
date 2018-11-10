@@ -1,6 +1,7 @@
 package tlsaudit
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"sort"
@@ -172,7 +173,6 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 		host := hostPort.Hostname
 		port := hostPort.Port
 		hostnameWithPort := fmt.Sprintf("%s:%s", host, port)
-		// println("Scanning", hostnameWithPort)
 		result := tlsmodel.ScanResult{}
 		result.Server = host
 		result.Port = port
@@ -197,7 +197,6 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 					MaxVersion:         versionOfTLS,
 					CipherSuites:       tlsmodel.AllCipherSuites,
 					NextProtos:         tlsmodel.AllALPNProtos,
-					// CurvePreferences:   []gotls.CurveID{gotls.CurveP256, gotls.CurveP384, gotls.CurveP521, gotls.X25519},
 				}
 				if serverName != "" {
 					config.ServerName = serverName
@@ -212,6 +211,10 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 			process(res, &result)
 		}
 		sort.Sort(uint16Sorter(result.SupportedProtocols))
+
+		//chech support for TLS_FALLBACK_SCSV
+		checkFallbackSCSVSupport(&result, hostnameWithPort, serverName, patientTimeout)
+
 		// fmt.Printf("Got result %s, %s, %#v \n", result.Server, result.Port, result.SupportedProtocols)
 		if !config.ProtocolsOnly {
 			//now test each cipher for only the supported protocols
@@ -232,11 +235,15 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 					outOrdered := make(chan orderedCipherStruct)
 					go func(tlsVer uint16) {
 						defer close(outOrdered)
+						sort.Sort(uint16Sorter(result.CipherSuiteByProtocol[tlsVer]))
 						ciphers := result.CipherSuiteByProtocol[tlsVer]
 						preference := false
 						cipherCount := len(ciphers)
 						nextCipher := 0
 						orderedCiphers := make([]uint16, cipherCount)
+
+					CheckPoint:
+						cipherCount = len(ciphers)
 						if cipherCount == 1 {
 							//single cipher is assumed to support ordering ;-)
 							preference = true
@@ -302,6 +309,20 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 											}
 										}
 									}
+								} else {
+									//0xCCA8: "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256" causes problems for the cipher ordering check. Exclude and redo if present
+									if msg.CipherSuite == 0xcca8 || msg2.CipherSuite == 0xcca8 {
+										ciphers2 := []uint16{}
+										for _, c := range ciphers {
+											if c != 0xcca8 {
+												ciphers2 = append(ciphers2, c)
+											}
+										}
+										ciphers = ciphers2
+										orderedCiphers[nextCipher] = 0xcca8
+										nextCipher++
+										goto CheckPoint
+									}
 								}
 							}
 						}
@@ -326,6 +347,60 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 		resultChannel <- result
 	}()
 	return resultChannel
+}
+
+func checkFallbackSCSVSupport(result *tlsmodel.ScanResult, hostnameWithPort, serverName string, patientTimeout time.Duration) {
+	maxProtocol := tlsmodel.VersionSSL20
+	if len(result.SupportedProtocols) > 0 {
+		switch result.SupportedProtocols[0] {
+		case tls.VersionTLS12:
+			maxProtocol = tls.VersionTLS11
+		case tls.VersionTLS11:
+			maxProtocol = tls.VersionTLS10
+		case tls.VersionTLS10:
+			maxProtocol = tls.VersionSSL30
+		default:
+			maxProtocol = tlsmodel.VersionSSL20
+		}
+
+		ciphers := []uint16{}
+		for _, p := range result.SupportedProtocols {
+			ciphers = append(ciphers, result.SelectedCipherByProtocol[p])
+		}
+		ciphers = append(ciphers, 0x5600) //add TLS_FALLBACK_SCSV last in line with section 4 of https://datatracker.ietf.org/doc/rfc7507/
+
+		config := &gotls.Config{
+			InsecureSkipVerify: true,
+			MinVersion:         maxProtocol,
+			MaxVersion:         maxProtocol,
+			CipherSuites:       ciphers,
+			NextProtos:         tlsmodel.AllALPNProtos,
+		}
+		if serverName != "" {
+			config.ServerName = serverName
+		}
+
+		rawConn, err := net.DialTimeout("tcp", hostnameWithPort, patientTimeout)
+		if err != nil {
+			return
+		}
+		defer rawConn.Close()
+		rawConn.SetDeadline(time.Now().Add(patientTimeout))
+		c := gotls.MakeClientConnection(rawConn, config)
+		hello, err := gotls.MakeClientHello(config)
+		if err != nil {
+			return
+		}
+		if _, err := c.WriteRecord(gotls.RecordTypeHandshake, hello.Marshal()); err != nil {
+			return
+		}
+
+		if _, err := c.ReadServerHello(); err != nil {
+			if strings.Contains(err.Error(), "inappropriate fallback") {
+				result.SupportsTLSFallbackSCSV = true
+			}
+		}
+	}
 }
 
 //make sure the slice only contains unique values
@@ -387,21 +462,21 @@ func process(res ServerHelloAndCert, result *tlsmodel.ScanResult) {
 	}
 }
 
-func processConnectionTest(outChannels []<-chan tlsmodel.HelloAndKey, result *tlsmodel.ScanResult) {
+func processConnectionTest(outChannels []<-chan tlsmodel.HelloAndKey, scan *tlsmodel.ScanResult) {
 	count := 0
 	for hk := range mergeHelloKeyChannels(outChannels...) {
 		count++
 		hello := hk.Hello
 		tlsVersion := hello.Vers
-		result.CipherSuiteByProtocol[tlsVersion] = append(result.CipherSuiteByProtocol[tlsVersion], hello.CipherSuite)
-		if val, ok := result.ServerHelloMessageByProtocolByCipher[tlsVersion]; ok {
+		scan.CipherSuiteByProtocol[tlsVersion] = append(scan.CipherSuiteByProtocol[tlsVersion], hello.CipherSuite)
+		if val, ok := scan.ServerHelloMessageByProtocolByCipher[tlsVersion]; ok {
 			val[hello.CipherSuite] = hello
-			result.ServerHelloMessageByProtocolByCipher[tlsVersion] = val
+			scan.ServerHelloMessageByProtocolByCipher[tlsVersion] = val
 		} else {
-			result.ServerHelloMessageByProtocolByCipher[tlsVersion] = make(map[uint16]tlsmodel.ServerHelloMessage)
-			result.ServerHelloMessageByProtocolByCipher[tlsVersion][hello.CipherSuite] = hello
+			scan.ServerHelloMessageByProtocolByCipher[tlsVersion] = make(map[uint16]tlsmodel.ServerHelloMessage)
+			scan.ServerHelloMessageByProtocolByCipher[tlsVersion][hello.CipherSuite] = hello
 		}
-		processECDHCipher(hk, result)
+		processECDHCipher(hk, scan)
 	}
 }
 
@@ -449,6 +524,10 @@ func testConnection(hostnameWithPort string, tlsVersion, cipher uint16, startTLS
 		}
 
 		hk, err := HandShakeUpToKeyExchange(hostnameWithPort, config, startTLS, patientTimeout)
+
+		if err != nil && hk.Hello.Vers != 0 && !hk.HasKey { // the scenario for ciphers that pass server hello stage but don't use key exchange
+			out <- hk
+		}
 		if err == nil || err.Error() == tlsmodel.NkxErrorMessage {
 			out <- hk
 		}

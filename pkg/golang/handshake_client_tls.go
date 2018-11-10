@@ -71,21 +71,22 @@ func MakeClientHello(config *Config) (*clientHelloMsg, error) {
 	possibleCipherSuites := config.cipherSuites()
 	hello.cipherSuites = make([]uint16, 0, len(possibleCipherSuites))
 
-NextCipherSuite:
+	// NextCipherSuite:
 	for _, suiteId := range possibleCipherSuites {
-		for _, suite := range cipherSuites {
-			if suite.id != suiteId {
-				continue
-			}
-			// Don't advertise TLS 1.2-only cipher suites unless
-			// we're attempting TLS 1.2.
-			//--changed by dayo: we don't need this behaviour
-			// if hello.vers < VersionTLS12 && suite.flags&suiteTLS12 != 0 {
-			// 	continue
-			// }
-			hello.cipherSuites = append(hello.cipherSuites, suiteId)
-			continue NextCipherSuite
-		}
+		// for _, suite := range cipherSuites {
+		//--changed by dayo: remove this safety net, we don't need this behaviour
+		// if suite.id != suiteId {
+		// 	continue
+		// }
+		// Don't advertise TLS 1.2-only cipher suites unless
+		// we're attempting TLS 1.2.
+		//--changed by dayo: we don't need this behaviour
+		// if hello.vers < VersionTLS12 && suite.flags&suiteTLS12 != 0 {
+		// 	continue
+		// }
+		hello.cipherSuites = append(hello.cipherSuites, suiteId)
+		// continue NextCipherSuite
+		// }
 	}
 
 	_, err := io.ReadFull(config.rand(), hello.random)
