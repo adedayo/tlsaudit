@@ -164,7 +164,6 @@ func process(c *cli.Context) error {
 			fmt.Printf("Finished scan of %s. Progress %f%% %d hosts of a total of %d in %f seconds\n",
 				host, 100*float32(processedIPs)/float32(totalIPs), processedIPs, totalIPs, time.Since(start).Seconds())
 		}
-
 	}
 	var scanResults []tlsmodel.ScanResult
 	for k := range scan {

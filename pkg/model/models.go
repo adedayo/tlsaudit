@@ -152,6 +152,12 @@ func GetCipherConfig(cipher string) (config CipherConfig, err error) {
 	return
 }
 
+//ScanRequest is a model to describe a given TLS Audit scan
+type ScanRequest struct {
+	CIDRs  []string
+	Config ScanConfig
+}
+
 //ScanConfig describes details of how the TLS scan should be carried out
 type ScanConfig struct {
 	ProtocolsOnly bool
