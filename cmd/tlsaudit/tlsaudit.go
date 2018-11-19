@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -219,9 +220,14 @@ func deDuplicate(data *[]string) {
 	*data = (*data)[:j]
 }
 func outputJSON(ports []tlsmodel.ScanResult) {
+	out := []tlsmodel.HumanScanResult{}
 	for _, p := range ports {
-		fmt.Printf("%#v\n", p.ToStringStruct())
+		out = append(out, p.ToStringStruct())
 	}
+	if jsonData, err := json.Marshal(out); err == nil {
+		fmt.Printf("%s\n", string(jsonData))
+	}
+
 }
 
 func outputText(results []tlsmodel.ScanResult, config tlsmodel.ScanConfig, c *cli.Context) {
