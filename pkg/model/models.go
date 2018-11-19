@@ -158,6 +158,13 @@ type ScanRequest struct {
 	Config ScanConfig
 }
 
+//ScanProgress contains partial scam results with an indication of progress
+type ScanProgress struct {
+	Progress    float32
+	ScanResults []HumanScanResult // this is the latest scan results delta, at the end of scan all cummulative scans are sent
+	Narrative   string            //freeflow text
+}
+
 //ScanConfig describes details of how the TLS scan should be carried out
 type ScanConfig struct {
 	ProtocolsOnly bool
@@ -277,8 +284,10 @@ type HumanScanResult struct {
 	// ServerHelloMessageByProtocolByCipher   map[string]map[string]ServerHelloMessage
 	// CertificatesPerProtocol                map[string]CertificateMessage
 	// KeyExchangeByProtocolByCipher          map[string]map[string]ServerKeyExchangeMsg
-	IsSTARTLS bool
-	IsSSH     bool
+	IsSTARTLS               bool
+	IsSSH                   bool
+	SupportsTLSFallbackSCSV bool
+	Score                   SecurityScore
 }
 
 func getCurve(protocol, cipher uint16, scan ScanResult) string {
@@ -351,6 +360,8 @@ func (s ScanResult) ToStringStruct() (out HumanScanResult) {
 
 	out.IsSTARTLS = s.IsSTARTLS
 	out.IsSSH = s.IsSSH
+	out.SupportsTLSFallbackSCSV = s.SupportsTLSFallbackSCSV
+	out.Score = s.CalculateScore()
 	return
 }
 
@@ -462,30 +473,35 @@ func (s *ScanResult) CalculateScore() (result SecurityScore) {
 
 	result.ProtocolScore = (highProtocol + lowProtocol) / 2
 
-	cipherKeyExchangeScore := 1000
-	cipherStrengthMinScore := 1000
-	cipherStrengthMaxScore := 0
-	for _, p := range s.SupportedProtocols {
-		c := s.SelectedCipherByProtocol[p]
-		selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
-		if s.HasCipherPreferenceOrderByProtocol[p] {
-			for _, c := range s.CipherPreferenceOrderByProtocol[p] {
-				selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
-			}
-		} else {
-			for _, c := range s.CipherSuiteByProtocol[p] {
-				selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
+	if s.SupportsTLS() {
+
+		cipherKeyExchangeScore := 1000
+		cipherStrengthMinScore := 1000
+		cipherStrengthMaxScore := 0
+		for _, p := range s.SupportedProtocols {
+			c := s.SelectedCipherByProtocol[p]
+			selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
+			if s.HasCipherPreferenceOrderByProtocol[p] {
+				for _, c := range s.CipherPreferenceOrderByProtocol[p] {
+					selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
+				}
+			} else {
+				for _, c := range s.CipherSuiteByProtocol[p] {
+					selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
+				}
 			}
 		}
+
+		result.KeyExchangeScore = cipherKeyExchangeScore
+
+		result.CipherEncryptionScore = (cipherStrengthMaxScore + cipherStrengthMinScore) / 2
+
+		result.Grade = toTLSGrade((30*result.ProtocolScore + 30*result.KeyExchangeScore + 40*result.CipherEncryptionScore) / 100)
+		result.adjustScore(*s)
+	} else {
+		//No TLS
+		result.Grade = toTLSGrade(-1)
 	}
-
-	result.KeyExchangeScore = cipherKeyExchangeScore
-
-	result.CipherEncryptionScore = (cipherStrengthMaxScore + cipherStrengthMinScore) / 2
-
-	result.Grade = toTLSGrade((30*result.ProtocolScore + 30*result.KeyExchangeScore + 40*result.CipherEncryptionScore) / 100)
-	result.adjustScore(*s)
-
 	return
 }
 
@@ -668,6 +684,8 @@ func toTLSGrade(score int) (grade string) {
 		grade = "D"
 	case score >= 20:
 		grade = "E"
+	case score < 0:
+		grade = "U" // for untrusted, possibly plaintext connection
 	default:
 		grade = "F"
 	}
