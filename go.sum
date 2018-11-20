@@ -4,6 +4,8 @@ github.com/adedayo/tcpscan v0.2.10 h1:fdYe1iJ11mqFvSvwkuF/iCjxhOZLQ1NNVhc599uq0r
 github.com/adedayo/tcpscan v0.2.10/go.mod h1:YQcmrHBKq/MeDZQM1sE3xs44SvjSaTzQvfEjd53u0kE=
 github.com/adedayo/tcpscan v0.2.12 h1:sqb1/kb4hxE1sDfIhNx9I7o8UcNuC5giwCe2NZa/aRc=
 github.com/adedayo/tcpscan v0.2.12/go.mod h1:YQcmrHBKq/MeDZQM1sE3xs44SvjSaTzQvfEjd53u0kE=
+github.com/adedayo/tcpscan v0.2.13 h1:bNfqoWzbghSkTogFwVsPDI9TEwGJwM+iNxp4f5pbjb4=
+github.com/adedayo/tcpscan v0.2.13/go.mod h1:YQcmrHBKq/MeDZQM1sE3xs44SvjSaTzQvfEjd53u0kE=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/google/go-cmp v0.2.0 h1:+dTQ8DZQJz0Mb/HjFlkptS1FeQ4cWSnN941F8aEG4SQ=

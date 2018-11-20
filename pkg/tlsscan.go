@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -29,7 +30,12 @@ type orderedCipherStruct struct {
 //ScanCIDRTLS combines a port scan with TLS scan for a CIDR range to return the open ports, and the TLS setting for each port over the result channel
 func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanResult {
 	scanResults := make(chan tlsmodel.ScanResult)
-
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Error: %+v\n", r)
+			os.Exit(1)
+		}
+	}()
 	go func() {
 		defer close(scanResults)
 		// fmt.Printf("Scanning TLS for host %s using IP addresses\n", cidr)
@@ -279,7 +285,7 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 										ciphers = make([]uint16, cipherCount)
 										next := 0
 										for _, c := range reverseCiphers {
-											if c != msg.CipherSuite {
+											if c != msg.CipherSuite && len(ciphers) > next {
 												ciphers[next] = c
 												next++
 											}
