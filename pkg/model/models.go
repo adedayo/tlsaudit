@@ -324,8 +324,10 @@ func (s ScanResult) ToStringStruct() (out HumanScanResult) {
 	out.CipherPreferenceOrderByProtocol = make(map[string][]string)
 	for k, v := range s.CipherPreferenceOrderByProtocol {
 		ciphers := []string{}
-		for _, c := range v {
-			ciphers = append(ciphers, getCurve(k, c, s))
+		if s.HasCipherPreferenceOrderByProtocol[k] {
+			for _, c := range v {
+				ciphers = append(ciphers, getCurve(k, c, s))
+			}
 		}
 		out.CipherPreferenceOrderByProtocol[TLSVersionMap[k]] = ciphers
 	}

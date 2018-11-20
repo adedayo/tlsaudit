@@ -32,7 +32,7 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 
 	go func() {
 		defer close(scanResults)
-		// fmt.Printf("Scanning TLS for host %s using IP addresses %s\n", host, strings.Join(ipStrings, ", "))
+		// fmt.Printf("Scanning TLS for host %s using IP addresses\n", cidr)
 		scan := make(map[string]portscan.PortACK)
 		ackChannels := []<-chan portscan.PortACK{}
 		resultChannels := []<-chan tlsmodel.ScanResult{}
@@ -49,6 +49,7 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 				key := ack.Host + ack.Port
 				domain := ""
 				if _, present := hostnames[ack.Host]; !present {
+					// println("Open port ", ack.Host, ack.Port)
 					cname, err := net.LookupCNAME(ack.Host)
 					if err == nil {
 						domain = cname
@@ -341,7 +342,10 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 			for out := range mergeOrderedCiperChannnels(orderedCipherChannels...) {
 				vers := out.Protocol
 				result.HasCipherPreferenceOrderByProtocol[vers] = out.Preference
-				result.CipherPreferenceOrderByProtocol[vers] = out.Ciphers
+				if out.Preference {
+					result.CipherPreferenceOrderByProtocol[vers] = out.Ciphers
+				}
+
 			}
 		}
 		resultChannel <- result
