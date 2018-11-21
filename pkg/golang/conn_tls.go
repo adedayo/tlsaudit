@@ -966,7 +966,10 @@ func (c *Conn) ReadServerHello() (tlsmodel.ServerHelloMessage, error) {
 	if err != nil {
 		return message, err
 	}
-	return msg.(*serverHelloMsg).Export(), nil
+	if srvHello, ok := msg.(*serverHelloMsg); ok {
+		return srvHello.Export(), nil
+	}
+	return message, fmt.Errorf("Expecting a server hello message but got %#v", msg)
 }
 
 //ReadServerCertificate does exactly what it says
