@@ -142,9 +142,6 @@ func GetCipherConfig(cipher string) (config CipherConfig, err error) {
 	if strings.Contains(m, "SHA") || strings.Contains(m, "MD5") || m == "NULL" {
 		config.MACPRF = m
 		config.Encryption = strings.Join(em[:len(em)-1], "_")
-		// } else {
-		// 	return config, fmt.Errorf("Could not determine encryption algorithm. Got %s", encMAC)
-		// }
 	} else {
 		config.Encryption = encMAC
 	}
@@ -394,7 +391,11 @@ func (s ScanResult) ToString(config ScanConfig) (result string) {
 		sortedSupportedProtocols := s.SupportedProtocols
 		sort.Slice(sortedSupportedProtocols, func(i, j int) bool { return sortedSupportedProtocols[i] > sortedSupportedProtocols[j] })
 		for _, tls := range sortedSupportedProtocols {
-			result += fmt.Sprintf("\t%s:\n", TLSVersionMap[tls])
+			startTLS := ""
+			if s.IsSTARTLS {
+				startTLS = " (STARTTLS)"
+			}
+			result += fmt.Sprintf("\t%s%s:\n", TLSVersionMap[tls], startTLS)
 			result += fmt.Sprintf("\t\tSupports secure renegotiation: %t\n", s.SecureRenegotiationSupportedByProtocol[tls])
 			result += fmt.Sprintf("\t\tApplication Layer Protocol Negotiation: %s\n", s.ALPNByProtocol[tls])
 			if !config.ProtocolsOnly {
@@ -409,7 +410,7 @@ func (s ScanResult) ToString(config ScanConfig) (result string) {
 				} else {
 					result += "\n\t\tSupported Ciphersuites (server has no order preference):\n"
 					for _, cipher := range s.CipherSuiteByProtocol[tls] {
-						result += fmt.Sprintf("\t\t\t%s\n", getCurve(tls, cipher, s))
+						result += fmt.Sprintf("\t\t\t%s - %s\n", getCurve(tls, cipher, s), scoreCipher(cipher, tls, s))
 					}
 				}
 			}
