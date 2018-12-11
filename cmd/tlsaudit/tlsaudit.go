@@ -8,12 +8,11 @@ import (
 	"net"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/adedayo/cidr"
-	tlsaudit "github.com/adedayo/tlsaudit/pkg"
+	"github.com/adedayo/tlsaudit/pkg"
 	"github.com/adedayo/tlsaudit/pkg/model"
 	"gopkg.in/urfave/cli.v2"
 )
@@ -170,7 +169,7 @@ func process(c *cli.Context) error {
 	for k := range scan {
 		scanResults = append(scanResults, scan[k])
 	}
-	sort.Sort(sorter(scanResults))
+	sort.Sort(tlsmodel.ScanResultSorter(scanResults))
 	if c.Bool("json") {
 		outputJSON(scanResults)
 	} else {
@@ -305,19 +304,4 @@ func generateResultText(r tlsmodel.ScanResult, currentServerInput string) (resul
 		}
 	}
 	return
-}
-
-type sorter []tlsmodel.ScanResult
-
-func (k sorter) Len() int {
-	return len(k)
-}
-
-func (k sorter) Swap(i, j int) {
-	k[i], k[j] = k[j], k[i]
-}
-func (k sorter) Less(i, j int) bool {
-	iPort, _ := strconv.Atoi(k[i].Port)
-	jPort, _ := strconv.Atoi(k[j].Port)
-	return k[i].Server < k[j].Server || (k[i].Server == k[j].Server && iPort <= jPort)
 }

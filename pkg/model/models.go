@@ -1,16 +1,20 @@
 package tlsmodel
 
 import (
+	"bytes"
 	"crypto/dsa"
 	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/gob"
 	"fmt"
+	"log"
 	"net"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Signature algorithms for TLS 1.2 (See RFC 5246, section A.4.1)
@@ -153,10 +157,45 @@ func GetCipherConfig(cipher string) (config CipherConfig, err error) {
 type ScanRequest struct {
 	CIDRs  []string
 	Config ScanConfig
+	ScanID string //Non-empty ScanID means this is a ScanRequest to resume an existing, possibly incomplete, scan
+}
+
+//PersistedScanRequest persisted version of ScanRequest
+type PersistedScanRequest struct {
+	Request   ScanRequest
+	Hosts     []string
+	ScanStart time.Time
+	ScanEnd   time.Time
+	Progress  int
+}
+
+//Marshall scan request
+func (psr PersistedScanRequest) Marshall() []byte {
+	result := bytes.Buffer{}
+	gob.Register(PersistedScanRequest{})
+	err := gob.NewEncoder(&result).Encode(&psr)
+	if err != nil {
+		log.Print(err)
+	}
+	return result.Bytes()
+}
+
+//UnmasharlPersistedScanRequest builds PersistedScanRequest from bytes
+func UnmasharlPersistedScanRequest(data []byte) (PersistedScanRequest, error) {
+
+	psr := PersistedScanRequest{}
+	gob.Register(psr)
+	buf := bytes.NewBuffer(data)
+	err := gob.NewDecoder(buf).Decode(&psr)
+	if err != nil {
+		return psr, err
+	}
+	return psr, nil
 }
 
 //ScanProgress contains partial scam results with an indication of progress
 type ScanProgress struct {
+	ScanID      string
 	Progress    float32
 	ScanResults []HumanScanResult // this is the latest scan results delta, at the end of scan all cummulative scans are sent
 	Narrative   string            //freeflow text
@@ -262,6 +301,19 @@ type ScanResult struct {
 	IsSTARTLS                              bool
 	IsSSH                                  bool
 	SupportsTLSFallbackSCSV                bool
+}
+
+//UnmarsharlScanResult builds ScanResults from bytes
+func UnmarsharlScanResult(data []byte) ([]ScanResult, error) {
+
+	sr := []ScanResult{}
+	gob.Register(sr)
+	buf := bytes.NewBuffer(data)
+	err := gob.NewDecoder(buf).Decode(&sr)
+	if err != nil {
+		return sr, err
+	}
+	return sr, nil
 }
 
 //HumanScanResult is a Stringified version of ScanResult
