@@ -14,6 +14,8 @@ github.com/adedayo/tcpscan v0.2.16 h1:5DVU7DMC4su/TcyLxABT6+X7SZcHBC8KSIAHba89HR
 github.com/adedayo/tcpscan v0.2.16/go.mod h1:YQcmrHBKq/MeDZQM1sE3xs44SvjSaTzQvfEjd53u0kE=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/dgraph-io/badger v0.0.0-20181004000000-439fd464b155 h1:BRS4yGvYPxnAPTLz5YDeiNA31f4yCa9Qj69tgjdEjoY=
+github.com/dgraph-io/badger v0.0.0-20181004000000-439fd464b155/go.mod h1:VZxzAIRPHRVNRKRo6AXrX9BJegn6il06VMTZVJYCIjQ=
 github.com/dgraph-io/badger v1.5.4 h1:gVTrpUTbbr/T24uvoCaqY2KSHfNLVGm0w+hbee2HMeg=
 github.com/dgraph-io/badger v1.5.4/go.mod h1:VZxzAIRPHRVNRKRo6AXrX9BJegn6il06VMTZVJYCIjQ=
 github.com/dgryski/go-farm v0.0.0-20180109070241-2de33835d102 h1:afESQBXJEnj3fu+34X//E8Wg3nEbMJxJkwSc0tPePK0=

@@ -157,6 +157,7 @@ func GetCipherConfig(cipher string) (config CipherConfig, err error) {
 type ScanRequest struct {
 	CIDRs  []string
 	Config ScanConfig
+	Day    string //Date the scan was run in the format yyyy-mm-dd
 	ScanID string //Non-empty ScanID means this is a ScanRequest to resume an existing, possibly incomplete, scan
 }
 

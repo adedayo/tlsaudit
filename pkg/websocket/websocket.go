@@ -1,4 +1,4 @@
-package tlsaudit
+package websocket
 
 import (
 	"bytes"
@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"path/filepath"
 
 	"github.com/adedayo/cidr"
 	"github.com/dgraph-io/badger"
@@ -40,10 +41,9 @@ var (
 		},
 	}
 	// dbCatalogueDirectory = "data/tlsaudit/catalogue"
-	dayFormat = "2006-01-02"
-	baseScanDBDirectory = "data/tlsaudit/scan"
-	 scanDbDirectory =  fmt.Sprintf("%s/%s", baseScanDBDirectory, time.Now().Format(dayFormat))
-	 
+	dayFormat           = "2006-01-02"
+	baseScanDBDirectory =  filepath.FromSlash("data/tlsaudit/scan")
+	// scanDbDirectory     = filepath.Join(baseScanDBDirectory, time.Now().Format(dayFormat)) 
 )
 
 type mydata struct {
@@ -61,7 +61,7 @@ func RealtimeScan(w http.ResponseWriter, req *http.Request) {
 				hosts := []string{}
 				psr := tlsmodel.PersistedScanRequest{}
 				if request.ScanID == "" { //start a fresh scan
-					request.ScanID = getNextScanID()
+					request.ScanID = GetNextScanID()
 					for _, x := range request.CIDRs {
 						rng := "/32"
 						ports := ""
@@ -88,13 +88,15 @@ func RealtimeScan(w http.ResponseWriter, req *http.Request) {
 					rand.Shuffle(len(hosts), func(i, j int) {
 						hosts[i], hosts[j] = hosts[j], hosts[i]
 					})
-					psr.Request = request
 					psr.Hosts = hosts
 					psr.ScanStart = time.Now()
-					persistScanRequest(psr)
+					request.Day = psr.ScanStart.Format(dayFormat)
+					psr.Request = request
+					PersistScanRequest(psr)
 				} else {
-					//resume an existing scan
-					psr, err = loadScanRequest(request.ScanID)
+					//resume an 
+					//LoadScanRequest retrieves persisted scan request from folder following a layout patternexisting scan
+					psr, err = LoadScanRequest(request.Day,request.ScanID)
 					if err != nil {
 						return
 					}
@@ -117,8 +119,7 @@ func RealtimeScan(w http.ResponseWriter, req *http.Request) {
 					conn.WriteJSON(out)
 				}
 
-				streamExistingResult(fmt.Sprintf("%s", scanID), callback, psr)
-
+				streamExistingResult(psr,callback)
 				for index, host := range psr.Hosts {
 					if index < psr.Progress {
 						continue
@@ -138,22 +139,18 @@ func RealtimeScan(w http.ResponseWriter, req *http.Request) {
 					}
 					psr.Progress = position
 					psr.ScanEnd = time.Now()
-					persistScanRequest(psr)
+					PersistScanRequest(psr)
 					var scanResults []tlsmodel.ScanResult
 					for k := range scan {
 						scanResults = append(scanResults, scan[k])
 					}
 					sort.Sort(tlsmodel.ScanResultSorter(scanResults))
-					persistScans(fmt.Sprintf("%s;%s", scanID, host), scanResults)
+					PersistScans(psr, host, scanResults)
 					narrative := fmt.Sprintf("Finished scan of %s. Progress %f%% %d hosts of a total of %d in %f seconds\n",
 						host, 100*float32(position)/float32(len(psr.Hosts)), position, len(psr.Hosts), psr.ScanEnd.Sub(psr.ScanStart).Seconds())
 					callback(position, scanResults, narrative)
 
 				}
-
-				// for result := range tlsaudit.ScanCIDRTLS(strings.Join(request.CIDRs, " "), request.Config) {
-				// 	conn.WriteJSON(result)
-				// }
 			} else {
 				println(err.Error())
 				return
@@ -166,38 +163,57 @@ func RealtimeScan(w http.ResponseWriter, req *http.Request) {
 }
 
 //ListScans returns the ScanID list of persisted scans
-func ListScans(rewindDays int) (result []string) {
+func ListScans(rewindDays int) (result []tlsmodel.ScanRequest) {
 	if rewindDays < 0 {
 		log.Print("The number of days in the past must be non-negative.")
 		return
 	}
-	dirs,err := ioutil.ReadDir(baseScanDBDirectory)
-	if err !=nil  {
+	dirs, err := ioutil.ReadDir(baseScanDBDirectory)
+	if err != nil {
 		log.Print(err)
 		return
 	}
 
+
 	allowedDates := make(map[string]bool)
 	today := time.Now()
-	for d:=rewindDays; d>=0; d-- {
-		allowedDates[fmt.Sprintf("%s", today.AddDate(0,0,-1*d).Format(dayFormat))]=true
+	for d := rewindDays; d >= 0; d-- {
+		allowedDates[fmt.Sprintf("%s", today.AddDate(0, 0, -1*d).Format(dayFormat))] = true
 	}
 
+	matchedDirs := []string{}
 	for _, d := range dirs {
 		dirName := d.Name()
 		if _, present := allowedDates[dirName]; present {
-			result = append(result, dirName)
+			matchedDirs = append(matchedDirs, dirName)
 		}
 	}
+
+	for _, d := range matchedDirs {
+		dirs, err := ioutil.ReadDir(filepath.Join(baseScanDBDirectory, d))
+		if err != nil {
+			log.Print(err)
+			return
+		}
+
+		for _, sID := range dirs {
+			scanID := sID.Name()
+			//LoadScanRequest retrieves persisted scan request from folder following a layout patternme()
+			if psr, err := LoadScanRequest(d,scanID); err == nil {
+				result = append(result,psr.Request) 
+			}
+		}
+	}
+	
+
 	return
 }
 
-func streamExistingResult(scanID string,
-	callback func(progress int, result []tlsmodel.ScanResult, narrative string),
-	psr tlsmodel.PersistedScanRequest) {
+func streamExistingResult(psr tlsmodel.PersistedScanRequest,
+	callback func(progress int, result []tlsmodel.ScanResult, narrative string)) {
 	opts := badger.DefaultOptions
-	opts.Dir = fmt.Sprintf("%s/%s", scanDbDirectory, scanID)
-	opts.ValueDir = fmt.Sprintf("%s/%s", scanDbDirectory, scanID)
+	opts.Dir = filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
+	opts.ValueDir = filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
 	db, err := badger.Open(opts)
 	if err != nil {
 		log.Fatal(err)
@@ -239,17 +255,12 @@ func streamExistingResult(scanID string,
 
 }
 
-//persistScans persists the result of scans per server (key="scanID;server")
-func persistScans(key string, scans []tlsmodel.ScanResult) {
+//PersistScans persists the result of scans per server
+func PersistScans(psr tlsmodel.PersistedScanRequest, server string, scans []tlsmodel.ScanResult) {
 	opts := badger.DefaultOptions
-	scanIDAndServer := strings.Split(key, ";")
-	scanID := scanIDAndServer[0]
-	server := ""
-	if len(scanIDAndServer) > 1 {
-		server = scanIDAndServer[1]
-	}
-	opts.Dir = fmt.Sprintf("%s/%s", scanDbDirectory, scanID)
-	opts.ValueDir = fmt.Sprintf("%s/%s", scanDbDirectory, scanID)
+	
+	opts.Dir = filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
+	opts.ValueDir = filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
 	db, err := badger.Open(opts)
 	if err != nil {
 		log.Fatal(err)
@@ -262,10 +273,11 @@ func persistScans(key string, scans []tlsmodel.ScanResult) {
 	})
 }
 
-func loadScanRequest(scanID string) (psr tlsmodel.PersistedScanRequest, e error) {
+//LoadScanRequest retrieves persisted scan request from folder following a layout pattern
+func LoadScanRequest(dir, scanID string) (psr tlsmodel.PersistedScanRequest, e error) {
 	opts := badger.DefaultOptions
-	opts.Dir = fmt.Sprintf("%s/%s", scanDbDirectory, scanID)
-	opts.ValueDir = fmt.Sprintf("%s/%s", scanDbDirectory, scanID)
+	opts.Dir = filepath.Join(baseScanDBDirectory, dir, scanID)
+	opts.ValueDir = filepath.Join(baseScanDBDirectory, dir, scanID)
 	db, err := badger.Open(opts)
 	if err != nil {
 		log.Fatal(err)
@@ -301,10 +313,12 @@ func marshallScanResults(s []tlsmodel.ScanResult) []byte {
 	}
 	return result.Bytes()
 }
-func persistScanRequest(psr tlsmodel.PersistedScanRequest) {
+
+//PersistScanRequest persists scan requesr
+func PersistScanRequest(psr tlsmodel.PersistedScanRequest) {
 	opts := badger.DefaultOptions
-	opts.Dir = fmt.Sprintf("%s/%s", scanDbDirectory, psr.Request.ScanID)
-	opts.ValueDir = fmt.Sprintf("%s/%s", scanDbDirectory, psr.Request.ScanID)
+	opts.Dir = filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
+	opts.ValueDir = filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
 	db, err := badger.Open(opts)
 	if err != nil {
 		log.Fatal(err)
@@ -316,9 +330,9 @@ func persistScanRequest(psr tlsmodel.PersistedScanRequest) {
 		return txn.Set([]byte(psr.Request.ScanID), psr.Marshall())
 	})
 }
-
-func getNextScanID() string {
-	prefix := scanDbDirectory
+//GetNextScanID returns the next unique scan ID 
+func GetNextScanID() string {
+	prefix := filepath.Join(baseScanDBDirectory, time.Now().Format(dayFormat)) 
 	if _, err := os.Stat(prefix); os.IsNotExist(err) {
 		if err2 := os.MkdirAll(prefix, 0755); err2 != nil {
 			log.Fatal("Could not create the path ", prefix)
@@ -329,5 +343,5 @@ func getNextScanID() string {
 		log.Fatal(err)
 		return ""
 	}
-	return strings.Replace(strings.TrimPrefix(dir, prefix), "/", "", -1)
+	return strings.Replace(strings.TrimPrefix(dir, prefix), string(os.PathSeparator), "", -1)
 }
