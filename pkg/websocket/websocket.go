@@ -276,8 +276,8 @@ func PersistScans(psr tlsmodel.PersistedScanRequest, server string, scans []tlsm
 //LoadScanRequest retrieves persisted scan request from folder following a layout pattern
 func LoadScanRequest(dir, scanID string) (psr tlsmodel.PersistedScanRequest, e error) {
 	opts := badger.DefaultOptions
-	opts.Dir = filepath.Join(baseScanDBDirectory, dir, scanID)
-	opts.ValueDir = filepath.Join(baseScanDBDirectory, dir, scanID)
+	opts.Dir = filepath.Join(baseScanDBDirectory, dir, scanID, "request")
+	opts.ValueDir = filepath.Join(baseScanDBDirectory, dir, scanID, "request")
 	db, err := badger.Open(opts)
 	if err != nil {
 		log.Fatal(err)
@@ -317,8 +317,8 @@ func marshallScanResults(s []tlsmodel.ScanResult) []byte {
 //PersistScanRequest persists scan requesr
 func PersistScanRequest(psr tlsmodel.PersistedScanRequest) {
 	opts := badger.DefaultOptions
-	opts.Dir = filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
-	opts.ValueDir = filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
+	opts.Dir = filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID, "request")
+	opts.ValueDir = filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID, "request")
 	db, err := badger.Open(opts)
 	if err != nil {
 		log.Fatal(err)
