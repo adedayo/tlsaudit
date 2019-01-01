@@ -10,7 +10,7 @@ import (
 
 	"github.com/adedayo/cidr"
 
-	"github.com/adedayo/tlsaudit/pkg/model"
+	tlsmodel "github.com/adedayo/tlsaudit/pkg/model"
 
 	"github.com/gorilla/websocket"
 )
@@ -43,9 +43,9 @@ type mydata struct {
 func RealtimeScan(w http.ResponseWriter, req *http.Request) {
 	if conn, err := upgrader.Upgrade(w, req, nil); err == nil {
 		go func() {
+			defer conn.Close()
 			var request tlsmodel.ScanRequest
 			if err := conn.ReadJSON(&request); err == nil {
-
 				hosts := []string{}
 				psr := tlsmodel.PersistedScanRequest{}
 				if request.ScanID == "" { //start a fresh scan
@@ -82,8 +82,7 @@ func RealtimeScan(w http.ResponseWriter, req *http.Request) {
 					psr.Request = request
 					PersistScanRequest(psr)
 				} else {
-					//resume an
-					//LoadScanRequest retrieves persisted scan request from folder following a layout patternexisting scan
+					//resume an existing scan
 					psr, err = LoadScanRequest(request.Day, request.ScanID)
 					if err != nil {
 						return

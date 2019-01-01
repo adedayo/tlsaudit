@@ -170,6 +170,28 @@ type PersistedScanRequest struct {
 	Progress  int
 }
 
+// //ServerResultSummary is a mini report of scan result
+// type ServerResultSummary struct {
+// 	Server   string
+// 	HostName string
+// 	Port     string
+// 	Grade    string
+// }
+
+//ScanResultSummary is the summary of a scan result session
+type ScanResultSummary struct {
+	Request          ScanRequest
+	ScanStart        time.Time
+	ScanEnd          time.Time
+	Progress         int
+	HostCount        int
+	PortCount        int
+	BestGrade        string
+	WorstGrade       string
+	HostGrades       map[string]string
+	GradeToHostPorts map[string][]string
+}
+
 //Marshall scan request
 func (psr PersistedScanRequest) Marshall() []byte {
 	result := bytes.Buffer{}
@@ -222,6 +244,38 @@ type SecurityScore struct {
 	CertificateScore      int
 	Grade                 string
 	Warnings              []string
+}
+
+//OrderGrade allows a simple numeric ordering of TLS grades. Actual values don't matter
+func (SecurityScore) OrderGrade(grade string) int {
+	switch grade {
+	case "A+":
+		return 20
+	case "A":
+		return 18
+	case "B":
+		return 16
+	case "C":
+		return 14
+	case "D":
+		return 12
+	case "E":
+		return 10
+	case "F":
+		return 8
+	case "T":
+		return 6
+	case "U":
+		return 4
+	case "Worst": // used to indicate worst case before data
+		return 100
+	case "Best": //used to indicate best case before data
+		return -100
+	case "":
+		return -10
+	default:
+		return -1
+	}
 }
 
 // KeyExchangeAlgorithm says what it is
@@ -513,6 +567,7 @@ func (s ScanResult) String() string {
 // https://community.qualys.com/docs/DOC-6321-ssl-labs-grading-2018
 //SecurityScoreL-Server-Rating-Guide contains the overall grading of a TLS/SSL port
 func (s *ScanResult) CalculateScore() (result SecurityScore) {
+
 	max := uint16(0)
 	min := uint16(1000)
 	for _, p := range s.SupportedProtocols {
@@ -553,12 +608,34 @@ func (s *ScanResult) CalculateScore() (result SecurityScore) {
 		result.CipherEncryptionScore = (cipherStrengthMaxScore + cipherStrengthMinScore) / 2
 
 		result.Grade = toTLSGrade((30*result.ProtocolScore + 30*result.KeyExchangeScore + 40*result.CipherEncryptionScore) / 100)
+
+		scoreCertificate(&result, s)
 		result.adjustScore(*s)
 	} else {
 		//No TLS
 		result.Grade = toTLSGrade(-1)
 	}
 	return
+}
+
+func scoreCertificate(score *SecurityScore, scan *ScanResult) {
+	for _, c := range scan.CertificatesPerProtocol {
+		certs, err := c.GetCertificates()
+		if err != nil || len(certs) == 0 {
+			cap(score, "T", "Error in obtaining certificates. Untrusted")
+			return
+		}
+
+		_, err = certs[0].Verify(x509.VerifyOptions{
+			Roots: nil,
+		})
+
+		if err != nil {
+			cap(score, "T", "Fails common public CA verification. "+err.Error())
+			return
+		}
+	}
+	score.CertificateScore = 100
 }
 
 func scoreProtocol(protocol uint16) (score int) {
@@ -666,7 +743,7 @@ func adjustUsingCertificateSecurity(score *SecurityScore, scan ScanResult) {
 //SecurityScore contains the overall grading of a TLS/SSL port
 func cap(score *SecurityScore, grade, reason string) {
 	score.Warnings = append(score.Warnings, fmt.Sprintf("%s: capped to %s", reason, grade))
-	if grade > score.Grade {
+	if score.OrderGrade(grade) > score.OrderGrade(score.Grade) {
 		score.Grade = grade
 	}
 }

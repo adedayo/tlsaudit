@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/adedayo/tcpscan"
-	"github.com/adedayo/tlsaudit/pkg/golang"
-	"github.com/adedayo/tlsaudit/pkg/model"
+	portscan "github.com/adedayo/tcpscan"
+	gotls "github.com/adedayo/tlsaudit/pkg/golang"
+	tlsmodel "github.com/adedayo/tlsaudit/pkg/model"
 )
 
 var (
@@ -55,7 +55,6 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 				key := ack.Host + ack.Port
 				domain := ""
 				if _, present := hostnames[ack.Host]; !present {
-					// println("Open port ", ack.Host, ack.Port)
 					cname, err := net.LookupCNAME(ack.Host)
 					if err == nil {
 						domain = cname

@@ -9,19 +9,38 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/adedayo/tlsaudit/pkg/model"
+	tlsmodel "github.com/adedayo/tlsaudit/pkg/model"
 	"github.com/dgraph-io/badger"
 )
 
 var (
 	dayFormat           = "2006-01-02"
 	baseScanDBDirectory = filepath.FromSlash("data/tlsaudit/scan")
+	scanSummaryCache    = make(map[string]tlsmodel.ScanResultSummary)
+	scanCache           = make(map[string][]tlsmodel.HumanScanResult)
+	psrCache            = make(map[string]tlsmodel.PersistedScanRequest)
+	lock                = sync.RWMutex{}
+	scanCacheLock       = sync.RWMutex{}
 )
 
-//ListScans returns the ScanID list of persisted scans
-func ListScans(rewindDays int) (result []tlsmodel.ScanRequest) {
+//GetScanData returns the scan results of a given scan
+func GetScanData(date, scanID string) []tlsmodel.HumanScanResult {
+	scanCacheLock.Lock()
+	key := fmt.Sprintf("%s:%s", date, scanID)
+	if cache, ok := scanCache[key]; ok {
+		scanCacheLock.Unlock()
+		return cache
+	}
+	scanCacheLock.Unlock()
+	getScanSummary(date, scanID) //side effect populate cache
+	return GetScanData(date, scanID)
+}
+
+//ListScans returns the ScanID list of  persisted scans
+func ListScans(rewindDays int, completed bool) (result []tlsmodel.ScanRequest) {
 	if rewindDays < 0 {
 		log.Print("The number of days in the past must be non-negative.")
 		return
@@ -56,12 +75,11 @@ func ListScans(rewindDays int) (result []tlsmodel.ScanRequest) {
 		for _, sID := range dirs {
 			scanID := sID.Name()
 			//LoadScanRequest retrieves persisted scan request from folder following a layout pattern
-			if psr, err := LoadScanRequest(d, scanID); err == nil {
+			if psr, err := LoadScanRequest(d, scanID); err == nil && (len(psr.Hosts) == psr.Progress) == completed {
 				result = append(result, psr.Request)
 			}
 		}
 	}
-
 	return
 }
 
@@ -86,11 +104,13 @@ func humanise(in []tlsmodel.ScanResult) (out []tlsmodel.HumanScanResult) {
 func streamExistingResult(psr tlsmodel.PersistedScanRequest,
 	callback func(progress int, result []tlsmodel.ScanResult, narrative string)) {
 	opts := badger.DefaultOptions
-	opts.Dir = filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
-	opts.ValueDir = filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
+	dbDir := filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
+	opts.Dir = dbDir
+	opts.ValueDir = dbDir
+	opts.ReadOnly = true
 	db, err := badger.Open(opts)
 	if err != nil {
-		log.Fatal(err)
+		log.Print(err)
 		return
 	}
 	defer db.Close()
@@ -132,8 +152,9 @@ func streamExistingResult(psr tlsmodel.PersistedScanRequest,
 //PersistScans persists the result of scans per server
 func PersistScans(psr tlsmodel.PersistedScanRequest, server string, scans []tlsmodel.ScanResult) {
 	opts := badger.DefaultOptions
-	opts.Dir = filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
-	opts.ValueDir = filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
+	dbDir := filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
+	opts.Dir = dbDir
+	opts.ValueDir = dbDir
 	opts.NumVersionsToKeep = 0
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -147,15 +168,143 @@ func PersistScans(psr tlsmodel.PersistedScanRequest, server string, scans []tlsm
 	})
 }
 
+//GetScanSummaries returns summaries of scans in the last number of days indicated by rewindDays
+func GetScanSummaries(rewindDays int) []tlsmodel.ScanResultSummary {
+	summaries := []tlsmodel.ScanResultSummary{}
+	for _, scan := range ListScans(rewindDays, true) {
+		summaries = append(summaries, getScanSummary(scan.Day, scan.ScanID))
+	}
+	return summaries
+}
+
+type gradePair struct {
+	best, worst string
+}
+
+//getScanSummary computes a summary of a scan as indicated by a scan date and ID
+func getScanSummary(dateDir, scanID string) tlsmodel.ScanResultSummary {
+	lock.Lock()
+	if sum, ok := scanSummaryCache[fmt.Sprintf("%s:%s", dateDir, scanID)]; ok {
+		lock.Unlock()
+		return sum
+	}
+	lock.Unlock()
+	summary := tlsmodel.ScanResultSummary{}
+	summary.HostGrades = make(map[string]string)
+	summary.WorstGrade = "Worst"
+	summary.BestGrade = "Best"
+	hosts := make(map[string]gradePair) // map from host to the best and worst grades
+	gradeToPorts := make(map[string][]string)
+	key := fmt.Sprintf("%s:%s", dateDir, scanID)
+	scanCacheLock.Lock()
+	defer scanCacheLock.Unlock()
+	StreamScan(dateDir, scanID, func(progress, total int, results []tlsmodel.HumanScanResult) {
+		summary.Progress = progress
+		summary.HostCount = total
+
+		for _, r := range results {
+			if cache, ok := scanCache[key]; ok {
+				cache = append(cache, r)
+				scanCache[key] = cache
+			} else {
+				scanCache[key] = []tlsmodel.HumanScanResult{r}
+			}
+			summary.PortCount++
+			grade := r.Score.Grade
+			if hostPorts, present := gradeToPorts[grade]; present {
+				hostPorts = append(hostPorts, fmt.Sprintf("%s:%s", r.Server, r.Port))
+				gradeToPorts[grade] = hostPorts
+			} else {
+				gradeToPorts[grade] = []string{fmt.Sprintf("%s:%s", r.Server, r.Port)}
+			}
+
+			if g, ok := hosts[r.Server]; ok {
+				if g.best == "" || r.Score.OrderGrade(g.best) < r.Score.OrderGrade(grade) { // better grade
+					g.best = grade
+				}
+
+				if g.worst == "" || r.Score.OrderGrade(g.worst) > r.Score.OrderGrade(grade) { //worse grade
+					g.worst = grade
+				}
+				hosts[r.Server] = g
+			} else {
+				hosts[r.Server] = gradePair{grade, grade}
+			}
+
+			if r.Score.OrderGrade(summary.BestGrade) < r.Score.OrderGrade(grade) {
+				summary.BestGrade = grade
+			}
+
+			if r.Score.OrderGrade(summary.WorstGrade) > r.Score.OrderGrade(grade) {
+				summary.WorstGrade = grade
+			}
+		}
+	})
+
+	for host, grades := range hosts {
+		summary.HostGrades[host] = fmt.Sprintf("%s:%s", grades.worst, grades.best)
+	}
+
+	if psr, err := LoadScanRequest(dateDir, scanID); err == nil {
+		summary.ScanStart = psr.ScanStart
+		summary.ScanEnd = psr.ScanEnd
+		summary.Request = psr.Request
+	}
+	summary.GradeToHostPorts = gradeToPorts
+	lock.Lock()
+	scanSummaryCache[fmt.Sprintf("%s:%s", dateDir, scanID)] = summary
+	lock.Unlock()
+
+	return summary
+}
+
+// func orderGrade(grade string) int {
+// 	switch grade {
+// 	case "A+":
+// 		return 20
+// 	case "A":
+// 		return 18
+// 	case "B":
+// 		return 16
+// 	case "C":
+// 		return 14
+// 	case "D":
+// 		return 12
+// 	case "E":
+// 		return 10
+// 	case "F":
+// 		return 8
+// 	case "T":
+// 		return 6
+// 	case "U":
+// 		return 4
+// 	case "Worst": // used to indicate worst case before data
+// 		return 100
+// 	case "Best": //used to indicate best case before data
+// 		return -100
+// 	case "":
+// 		return -10
+// 	default:
+// 		return -1
+// 	}
+// }
+
 //LoadScanRequest retrieves persisted scan request from folder following a layout pattern
 func LoadScanRequest(dir, scanID string) (psr tlsmodel.PersistedScanRequest, e error) {
+	lock.Lock()
+	if psr, ok := psrCache[fmt.Sprintf("%s:%s", dir, scanID)]; ok {
+		lock.Unlock()
+		return psr, nil
+	}
+	lock.Unlock()
+	dbDir := filepath.Join(baseScanDBDirectory, dir, scanID, "request")
 	opts := badger.DefaultOptions
-	opts.Dir = filepath.Join(baseScanDBDirectory, dir, scanID, "request")
-	opts.ValueDir = filepath.Join(baseScanDBDirectory, dir, scanID, "request")
+	opts.Dir = dbDir
+	opts.ValueDir = dbDir
+	opts.ReadOnly = true
 	db, err := badger.Open(opts)
 	if err != nil {
-		log.Fatal(err)
-		return
+		return psr, err
 	}
 	defer db.Close()
 	data := []byte{}
@@ -174,7 +323,13 @@ func LoadScanRequest(dir, scanID string) (psr tlsmodel.PersistedScanRequest, e e
 	if outErr != nil {
 		return psr, outErr
 	}
-	return tlsmodel.UnmasharlPersistedScanRequest(data)
+	psr, e = tlsmodel.UnmasharlPersistedScanRequest(data)
+	if e == nil && len(psr.Hosts) == psr.Progress {
+		lock.Lock()
+		psrCache[fmt.Sprintf("%s:%s", dir, scanID)] = psr
+		lock.Unlock()
+	}
+	return psr, e
 }
 
 //arshallScanResults marshalls scan results
@@ -191,8 +346,9 @@ func marshallScanResults(s []tlsmodel.ScanResult) []byte {
 //PersistScanRequest persists scan requesr
 func PersistScanRequest(psr tlsmodel.PersistedScanRequest) {
 	opts := badger.DefaultOptions
-	opts.Dir = filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID, "request")
-	opts.ValueDir = filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID, "request")
+	dbDir := filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID, "request")
+	opts.Dir = dbDir
+	opts.ValueDir = dbDir
 	opts.NumVersionsToKeep = 0
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -221,8 +377,9 @@ func CompactDB(dayPath, scanID string) {
 
 	//compact the scan requests
 	opts := badger.DefaultOptions
-	opts.Dir = filepath.Join(baseScanDBDirectory, dayPath, scanID, "request")
-	opts.ValueDir = filepath.Join(baseScanDBDirectory, dayPath, scanID, "request")
+	dbDir := filepath.Join(baseScanDBDirectory, dayPath, scanID, "request")
+	opts.Dir = dbDir
+	opts.ValueDir = dbDir
 	opts.NumVersionsToKeep = 0
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -240,8 +397,9 @@ func CompactDB(dayPath, scanID string) {
 	db.Close()
 
 	//compact the scan results
-	opts.Dir = filepath.Join(baseScanDBDirectory, dayPath, scanID)
-	opts.ValueDir = filepath.Join(baseScanDBDirectory, dayPath, scanID)
+	dbDir = filepath.Join(baseScanDBDirectory, dayPath, scanID)
+	opts.Dir = dbDir
+	opts.ValueDir = dbDir
 	db, err = badger.Open(opts)
 	if err != nil {
 		println(err.Error())
