@@ -250,31 +250,45 @@ type SecurityScore struct {
 func (SecurityScore) OrderGrade(grade string) int {
 	switch grade {
 	case "A+":
-		return 20
+		return 120
 	case "A":
-		return 18
+		return 118
 	case "B":
-		return 16
+		return 116
 	case "C":
-		return 14
+		return 114
 	case "D":
-		return 12
+		return 112
 	case "E":
-		return 10
+		return 110
 	case "F":
-		return 8
+		return 108
 	case "T":
-		return 6
+		return 106
+	case "TA+":
+		return 20
+	case "TA":
+		return 18
+	case "TB":
+		return 16
+	case "TC":
+		return 14
+	case "TD":
+		return 12
+	case "TE":
+		return 10
+	case "TF":
+		return 8
 	case "U":
-		return 4
+		return 6
 	case "Worst": // used to indicate worst case before data
-		return 100
+		return -200
 	case "Best": //used to indicate best case before data
-		return -100
+		return 200
 	case "":
-		return -10
+		return 200
 	default:
-		return -1
+		return -200
 	}
 }
 
@@ -386,12 +400,30 @@ type HumanScanResult struct {
 	SecureRenegotiationSupportedByProtocol map[string]bool
 	CipherSuiteByProtocol                  map[string][]string
 	// ServerHelloMessageByProtocolByCipher   map[string]map[string]ServerHelloMessage
-	// CertificatesPerProtocol                map[string]CertificateMessage
+	CertificatesPerProtocol map[string][]HumanCertificate
 	// KeyExchangeByProtocolByCipher          map[string]map[string]ServerKeyExchangeMsg
 	IsSTARTLS               bool
 	IsSSH                   bool
 	SupportsTLSFallbackSCSV bool
 	Score                   SecurityScore
+}
+
+//HumanCertificate is a "string" representation of various attributes of a certificate
+type HumanCertificate struct {
+	Subject            string
+	SubjectSerialNo    string
+	SubjectCN          string
+	SubjectAN          string
+	SerialNumber       string
+	Issuer             string
+	PublicKeyAlgorithm string
+	ValidFrom          string
+	ValidUntil         string
+	Key                string
+	SignatureAlgorithm string
+	Signature          string
+	OcspStapling       bool
+	RevocationDetail   string
 }
 
 func getCurve(protocol, cipher uint16, scan ScanResult) string {
@@ -430,7 +462,7 @@ func (s ScanResult) ToStringStruct() (out HumanScanResult) {
 		ciphers := []string{}
 		if s.HasCipherPreferenceOrderByProtocol[k] {
 			for _, c := range v {
-				ciphers = append(ciphers, getCurve(k, c, s))
+				ciphers = append(ciphers, fmt.Sprintf("%s,%s", getCurve(k, c, s), scoreCipher(c, k, s)))
 			}
 		}
 		out.CipherPreferenceOrderByProtocol[TLSVersionMap[k]] = ciphers
@@ -459,16 +491,70 @@ func (s ScanResult) ToStringStruct() (out HumanScanResult) {
 	for k, v := range s.CipherSuiteByProtocol {
 		ciphers := []string{}
 		for _, c := range v {
-			ciphers = append(ciphers, getCurve(k, c, s))
+			ciphers = append(ciphers, fmt.Sprintf("%s,%s", getCurve(k, c, s), scoreCipher(c, k, s)))
 		}
 		out.CipherSuiteByProtocol[TLSVersionMap[k]] = ciphers
 	}
 
+	out.CertificatesPerProtocol = make(map[string][]HumanCertificate)
+	for p, c := range s.CertificatesPerProtocol {
+		certs, err := c.GetCertificates()
+		out.CertificatesPerProtocol[TLSVersionMap[p]] = []HumanCertificate{}
+		if err != nil {
+			continue
+		}
+
+		for _, cert := range certs {
+			certKey := ""
+			if key, ok := cert.PublicKey.(*rsa.PublicKey); ok {
+				certKey = fmt.Sprintf("%d bits (e %d)", key.N.BitLen(), key.E)
+			}
+			sigLen := len(cert.Signature) - 1
+			sig := fmt.Sprintf("%x...%x", cert.Signature[:8], cert.Signature[sigLen-8:sigLen])
+			ocsp := false
+			if o, ok := s.OcspStaplingByProtocol[p]; ok {
+				ocsp = o
+			}
+			out.CertificatesPerProtocol[TLSVersionMap[p]] = append(out.CertificatesPerProtocol[TLSVersionMap[p]],
+				HumanCertificate{
+					Subject:            cert.Subject.String(),
+					SubjectSerialNo:    cert.Subject.SerialNumber,
+					SubjectCN:          cert.Subject.CommonName,
+					SubjectAN:          strings.Join(cert.DNSNames, ", "),
+					SerialNumber:       cert.SerialNumber.String(),
+					Issuer:             cert.Issuer.String(),
+					PublicKeyAlgorithm: cert.PublicKeyAlgorithm.String(),
+					ValidFrom:          cert.NotBefore.String(),
+					ValidUntil:         cert.NotAfter.String(),
+					Key:                certKey,
+					SignatureAlgorithm: cert.SignatureAlgorithm.String(),
+					Signature:          sig,
+					OcspStapling:       ocsp,
+					RevocationDetail:   revokers(cert),
+				})
+
+		}
+	}
 	out.IsSTARTLS = s.IsSTARTLS
 	out.IsSSH = s.IsSSH
 	out.SupportsTLSFallbackSCSV = s.SupportsTLSFallbackSCSV
 	out.Score = s.CalculateScore()
 	return
+}
+
+func revokers(cert *x509.Certificate) string {
+	revs := []string{}
+	ocsp := ""
+	crl := ""
+	if len(cert.OCSPServer) > 0 {
+		revs = append(revs, "OCSP")
+		ocsp = fmt.Sprintf("OCSP: %s ", strings.Join(cert.OCSPServer, ", "))
+	}
+	if len(cert.CRLDistributionPoints) > 0 {
+		revs = append(revs, "CRL")
+		crl = fmt.Sprintf("CRL: %s ", strings.Join(cert.CRLDistributionPoints, ", "))
+	}
+	return fmt.Sprintf("%s. %s%s", strings.Join(revs, " and "), ocsp, crl)
 }
 
 //ToJSON returns a JSON-formatted string representation of the ScanResult
@@ -619,9 +705,11 @@ func (s *ScanResult) CalculateScore() (result SecurityScore) {
 }
 
 func scoreCertificate(score *SecurityScore, scan *ScanResult) {
+	println("Computing certificate score")
 	for _, c := range scan.CertificatesPerProtocol {
 		certs, err := c.GetCertificates()
 		if err != nil || len(certs) == 0 {
+			println("Certificate Error: ", err.Error())
 			cap(score, "T", "Error in obtaining certificates. Untrusted")
 			return
 		}
@@ -631,11 +719,13 @@ func scoreCertificate(score *SecurityScore, scan *ScanResult) {
 		})
 
 		if err != nil {
+			println("Certificate Error: ", err.Error(), certs[0].Subject.String())
 			cap(score, "T", "Fails common public CA verification. "+err.Error())
 			return
 		}
 	}
 	score.CertificateScore = 100
+	println("Final certificate score ", score.CertificateScore)
 }
 
 func scoreProtocol(protocol uint16) (score int) {
@@ -742,8 +832,12 @@ func adjustUsingCertificateSecurity(score *SecurityScore, scan ScanResult) {
 
 //SecurityScore contains the overall grading of a TLS/SSL port
 func cap(score *SecurityScore, grade, reason string) {
-	score.Warnings = append(score.Warnings, fmt.Sprintf("%s: capped to %s", reason, grade))
-	if score.OrderGrade(grade) > score.OrderGrade(score.Grade) {
+	score.Warnings = append(score.Warnings, fmt.Sprintf("%s. Grade capped to %s", reason, grade))
+	if grade == "T" && score.OrderGrade(score.Grade) > score.OrderGrade("T") {
+		score.Grade = "T" + score.Grade
+	} else if strings.HasPrefix(score.Grade, "T") && score.OrderGrade(score.Grade) > score.OrderGrade("T"+grade) {
+		score.Grade = "T" + grade
+	} else if score.OrderGrade(score.Grade) > score.OrderGrade(grade) {
 		score.Grade = grade
 	}
 }
