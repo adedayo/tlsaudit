@@ -705,7 +705,6 @@ func (s *ScanResult) CalculateScore() (result SecurityScore) {
 }
 
 func scoreCertificate(score *SecurityScore, scan *ScanResult) {
-	println("Computing certificate score")
 	for _, c := range scan.CertificatesPerProtocol {
 		certs, err := c.GetCertificates()
 		if err != nil || len(certs) == 0 {
@@ -763,10 +762,13 @@ func (score *SecurityScore) adjustScore(scan ScanResult) {
 
 	adjustUsingCertificateSecurity(score, scan)
 
-	if scan.SupportsTLSFallbackSCSV && score.Grade == "A" {
-		score.Grade = "A+"
+	if scan.SupportsTLSFallbackSCSV {
+		if score.Grade == "A" {
+			score.Grade = "A+"
+		} else if score.Grade == "TA" {
+			score.Grade = "TA+"
+		}
 	}
-
 }
 
 func adjustUsingCertificateSecurity(score *SecurityScore, scan ScanResult) {
@@ -978,4 +980,27 @@ func scoreCipher(cipher, protocol uint16, scan ScanResult) (score string) {
 		return toTLSGrade(s)
 	}
 	return
+}
+
+//TLSAuditConfig is the configuration of the nmap runner
+type TLSAuditConfig struct {
+	DailySchedules   []string `yaml:"dailySchedules"` // in the format 13:45, 01:20 etc
+	DB               string   `yaml:"db"`
+	Table            string   `yaml:"hostTable"`
+	IsProduction     bool     `yaml:"isProduction"`
+	PacketsPerSecond int      `yaml:"packetsPerSecond"`
+	Timeout          int      `yaml:"timeout"`
+	CIDRRanges       []string `yaml:"cidrRanges"`
+}
+
+//TLSAuditSnapshot a snapshot representing the results of a given scan session
+type TLSAuditSnapshot struct {
+	Timestamp   time.Time
+	ScanResults []ScanResult
+}
+
+//TLSAuditSnapshotHuman a snapshot representing the results of a given scan session
+type TLSAuditSnapshotHuman struct {
+	Timestamp   time.Time
+	ScanResults []HumanScanResult
 }
