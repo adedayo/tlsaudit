@@ -31,16 +31,25 @@ Depending on the fidelity of the network being scanned or the size of CIDR range
 ### Command line options
 
 ```bash
-   --json, -j                     generate JSON output (default: false)
-   --protocols-only, -p           only check supported protocols (will not do detailed checks on supported ciphers) (default: false)
-   --hide-certs, -c               suppress certificate information in output (default: false)
-   --quiet, -q                    control whether to produce a running commentary of progress or stay quiet till the end (default: false)
-   --timeout TIMEOUT, -t TIMEOUT  TIMEOUT (in seconds) to adjust how much we are willing to wait for servers to come back with responses. Smaller timeout sacrifices accuracy for speed (default: 5)
-   --rate value, -r value         the rate (in packets per second) that we should use to scan for open ports (default: 1000)
-   --output FILE, -o FILE         write results into an output FILE (default: "tlsaudit.txt")
-   --input FILE, -i FILE          read the CIDR range, IPs and domains to scan from an input FILE separated by commas, or newlines (default: "tlsaudit_input.txt")
-   --help, -h                     show help (default: false)
-   --version, -v                  print the version (default: false)
+Usage:
+  tlsaudit [flags]
+
+Examples:
+tlsaudit 8.8.8.8/32 10.10.10.1/30
+tlsaudit --timeout=10 8.8.8.8:443/32
+
+Flags:
+  -h, --help                                                help for tlsaudit
+  -c, --hide-certs                                          suppress certificate information in output (default: false)
+  -i, --input string[="tlsaudit_input.txt"]                 read the CIDR range, IPs and domains to scan from an input FILE separated by commas, or newlines (default "tlsaudit_input.txt")
+  -j, --json                                                generate JSON output
+  -o, --output string[="tlsaudit.txt"]                      write results into an output FILE (default "tlsaudit.txt")
+  -p, --protocols-only                                      only check supported protocols - will not do detailed checks on supported ciphers (default: false)
+  -q, --quiet                                               control whether to produce a running commentary of progress or stay quiet till the end (default: false)
+  -r, --rate int                                            the rate (in packets per second) that we should use to scan for open ports (default 1000)
+  -s, --service string[="data/config/TLSAuditConfig.yml"]   run tlsaudit as a service (default "data/config/TLSAuditConfig.yml")
+  -t, --timeout int                                         TIMEOUT (in seconds) to adjust how much we are willing to wait for servers to come back with responses. Smaller timeout sacrifices accuracy for speed (default 5)
+      --version                                             version for tlsaudit
 ```
 
 ## An issue on macOS
