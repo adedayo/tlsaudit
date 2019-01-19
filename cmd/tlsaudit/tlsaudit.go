@@ -33,6 +33,10 @@ import (
 	"github.com/adedayo/tlsaudit/cmd/tlsaudit/cmd"
 )
 
+var (
+	version = "0.0.0" // deployed version will be taken from release tags
+)
+
 func main() {
 	cmd.Execute()
 }

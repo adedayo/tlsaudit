@@ -20,6 +20,9 @@ changelog:
     exclude:
     - '^docs:'
     - '^test:'
+before:
+   hooks:
+   - go mod download
 brew:
   github:
     owner: adedayo

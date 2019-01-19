@@ -47,8 +47,7 @@ import (
 )
 
 var (
-	version = "0.0.0" // deployed version will be taken from release tags
-	app     = "tlsaudit"
+	app = "tlsaudit"
 )
 
 var rootCmd = &cobra.Command{
