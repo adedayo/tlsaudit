@@ -47,25 +47,27 @@ import (
 )
 
 var (
-	app = "tlsaudit"
+	app        = "tlsaudit"
+	appVersion = "0.0.0"
+	rootCmd    = &cobra.Command{
+		Use:     app,
+		Short:   "Audit TLS settings on open ports on servers",
+		Example: "tlsaudit 8.8.8.8/32 10.10.10.1/30\ntlsaudit --timeout=10 8.8.8.8:443/32",
+		RunE:    runner,
+	}
 )
-
-var rootCmd = &cobra.Command{
-	Use:     app,
-	Short:   "Audit TLS settings on open ports on servers",
-	Version: version,
-	Example: "tlsaudit 8.8.8.8/32 10.10.10.1/30\ntlsaudit --timeout=10 8.8.8.8:443/32",
-	Long: fmt.Sprintf(`tlsaudit - Audit TLS settings on open ports on servers
-
-Version: %s
-
-Author: Adedayo Adetoye (Dayo) <https://github.com/adedayo>`, version),
-	RunE: runner,
-}
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
+func Execute(version string) {
+	appVersion = version
+	rootCmd.Version = version
+	rootCmd.Long = fmt.Sprintf(`tlsaudit - Audit TLS settings on open ports on servers
+	
+	Version: %s
+	
+	Author: Adedayo Adetoye (Dayo) <https://github.com/adedayo>`, version)
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -143,7 +145,7 @@ func runner(cmd *cobra.Command, args []string) error {
 	for x := range uniqueArgsMap {
 		args = append(args, x)
 	}
-	fmt.Printf("Starting TLSAudit %s (https://github.com/adedayo/tlsaudit)\nScanning: %s\n", version, strings.Join(args, ", "))
+	fmt.Printf("Starting TLSAudit %s (https://github.com/adedayo/tlsaudit)\nScanning: %s\n", appVersion, strings.Join(args, ", "))
 	config := tlsmodel.ScanConfig{
 		ProtocolsOnly:    protocolsOnly,
 		Timeout:          timeout,
