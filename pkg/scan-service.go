@@ -69,7 +69,7 @@ func resolveIPs(ips []string) {
 }
 
 func ipResolver(ip string) string {
-	defer lock.Unlock()
+	defer ipLock.Unlock()
 	ipLock.Lock()
 	if hostname, present := resolvedIPs[ip]; present {
 		return hostname
