@@ -41,15 +41,9 @@ var (
 func Service(configPath string) {
 	// suspend := make(chan bool)
 	println("Running TLSAudit Service ...")
-	config, err := loadTLSConfig(configPath)
-	if err != nil {
-		os.Exit(1)
-	}
-	ips := getIPsToScan(config)
-	go resolveIPs(ips)
-	ScheduleTLSAudit(ips, ipResolver, config)
+	TLSAuditConfigPath = configPath
+	ScheduleTLSAudit(getIPsFromConfig, ipResolver)
 	runtime.Goexit()
-	println("Finished service run")
 	// <-suspend
 }
 
@@ -76,6 +70,14 @@ func ipResolver(ip string) string {
 	}
 	return ""
 }
+func getIPsFromConfig() []string {
+	config, err := loadTLSConfig(TLSAuditConfigPath)
+	if err != nil {
+		return []string{}
+	}
+	ips := getIPsToScan(config)
+	return ips
+}
 
 func getIPsToScan(config tlsmodel.TLSAuditConfig) []string {
 	data := make(map[string]bool)
@@ -96,7 +98,7 @@ func getIPsToScan(config tlsmodel.TLSAuditConfig) []string {
 }
 
 //ScheduleTLSAudit runs TLSAudit scan
-func ScheduleTLSAudit(ips []string, resolver func(string) string, config tlsmodel.TLSAuditConfig) {
+func ScheduleTLSAudit(ipSource func() []string, resolver func(string) string) {
 
 	//a restart schould clear the lock file
 	if _, err := os.Stat(runFlag2); !os.IsNotExist(err) { // there is a runlock
@@ -107,21 +109,23 @@ func ScheduleTLSAudit(ips []string, resolver func(string) string, config tlsmode
 	}
 
 	scanJob := func() {
-		runTLSScan(ips, resolver, config)
+		runTLSScan(ipSource, resolver)
 	}
 
-	for _, t := range config.DailySchedules {
-		if config.IsProduction {
-			println("Running next at ", t)
-			scheduler.Every().Day().At(t).Run(scanJob)
-		} else {
-			scheduler.Every(2).Hours().Run(scanJob)
+	if config, err := loadTLSConfig(TLSAuditConfigPath); err == nil {
+		for _, t := range config.DailySchedules {
+			if config.IsProduction {
+				println("Running next at ", t)
+				scheduler.Every().Day().At(t).Run(scanJob)
+			} else {
+				scheduler.Every(2).Hours().Run(scanJob)
+			}
 		}
 	}
 }
 
-//RunTLSScan accepts list of IP addresses to scan and a function to map the IPs to hostnames (if any) - function to allow the hostname resolution happen in parallel if necessary
-func runTLSScan(ips []string, ipToHostnameResolver func(string) string, config tlsmodel.TLSAuditConfig) {
+//RunTLSScan accepts generator of IP addresses to scan and a function to map the IPs to hostnames (if any) - function to allow the hostname resolution happen in parallel if necessary
+func runTLSScan(ipSource func() []string, ipToHostnameResolver func(string) string) {
 	//create a directory, if not exist, for tlsaudit to keep temporary file
 	path := filepath.Join("data", "tlsaudit", "scan")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -178,7 +182,7 @@ func runTLSScan(ips []string, ipToHostnameResolver func(string) string, config t
 		}
 		fmt.Printf("Will be scanning with PSR %#v", psr)
 	} else { // starting a fresh scan
-		hosts = ips
+		hosts = ipSource()
 		//shuffle hosts randomly
 		rand.Shuffle(len(hosts), func(i, j int) {
 			hosts[i], hosts[j] = hosts[j], hosts[i]
@@ -211,6 +215,7 @@ func runTLSScan(ips []string, ipToHostnameResolver func(string) string, config t
 		request := tlsmodel.ScanRequest{}
 		request.Day = today
 		request.ScanID = GetNextScanID()
+		config, _ := loadTLSConfig(TLSAuditConfigPath)
 		scanConfig := tlsmodel.ScanConfig{
 			PacketsPerSecond: config.PacketsPerSecond,
 			Timeout:          config.Timeout,
@@ -218,6 +223,8 @@ func runTLSScan(ips []string, ipToHostnameResolver func(string) string, config t
 		request.Config = scanConfig
 		psr.Request = request
 	}
+
+	go resolveIPs(hosts)
 
 	//get ready to scan
 	//get where we "stopped" last time possibly after a crash
