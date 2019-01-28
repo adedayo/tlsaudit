@@ -44,7 +44,7 @@ var cipherCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(cipherCmd)
+	//rootCmd.AddCommand(cipherCmd)
 }
 
 func processCipherCommand(cmd *cobra.Command, args []string) {

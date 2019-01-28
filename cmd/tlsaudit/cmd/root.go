@@ -123,6 +123,7 @@ func init() {
 
 func runner(cmd *cobra.Command, args []string) error {
 
+	println("Running command")
 	if len(args) == 0 && !cmd.Flag("service").Changed && !cmd.Flag("input").Changed {
 		return cmd.Usage()
 	}

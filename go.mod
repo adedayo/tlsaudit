@@ -17,4 +17,4 @@ require (
 	gopkg.in/yaml.v2 v2.2.2
 )
 
-replace github.com/adedayo/tcpscan v0.3.0 => /Users/aadetoye/softdev/opensrc/go/src/github.com/adedayo/tcpscan
+//replace github.com/adedayo/tcpscan v0.3.0 => /Users/aadetoye/softdev/opensrc/go/src/github.com/adedayo/tcpscan

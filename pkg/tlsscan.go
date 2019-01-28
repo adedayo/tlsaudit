@@ -78,7 +78,7 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 			}
 		}
 		for res := range MergeResultChannels(resultChannels...) {
-			fmt.Printf("Got Merged Scan result of Server %s", res.Server)
+			fmt.Printf("Got Merged Scan result of Server %s:%s\n", res.Server, res.Port)
 			scanResults <- res
 		}
 	}()
