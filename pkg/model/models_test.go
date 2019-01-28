@@ -60,7 +60,7 @@ func TestGetCipherConfig(t *testing.T) {
 	}
 }
 
-func TestIANACiphersNotErroing(t *testing.T) {
+func TestIANACiphersNotErroring(t *testing.T) {
 	for _, x := range enumerateCipherParseErrors() {
 		t.Run(x.cipher, func(t *testing.T) {
 			if x.err != nil {

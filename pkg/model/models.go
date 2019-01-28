@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -27,6 +28,7 @@ const (
 
 //CipherConfig extracts the important elements of a Ciphersuit based on its name
 type CipherConfig struct {
+	CipherID       uint16
 	Cipher         string
 	KeyExchange    string
 	Authentication string
@@ -111,46 +113,89 @@ func (cc *CipherConfig) GetKeyExchangeKeyLength(cipher, protocol uint16, scan Sc
 	return kl
 }
 
-//GetCipherConfig extracts a `CipherConfig` from the Cipher's IANA string name
-// does some basic sanity checks and returns an error if the input cipher name is not sane
-// NOTE however, only IANA names from here are assumed and "supported": https://www.iana.org/assignments/tls-parameters/tls-parameters.txt
-func GetCipherConfig(cipher string) (config CipherConfig, err error) {
-	config.Cipher = cipher
-	if cipher == "TLS_EMPTY_RENEGOTIATION_INFO_SCSV" || cipher == "TLS_FALLBACK_SCSV" {
+//getContextFreeKeyExchangeKeyLength returns the key length indicated by the cipher and key exchange config
+func (cc *CipherConfig) getContextFreeKeyExchangeKeyLength(config CipherConfigParameters) int {
+	kl := -1
+	kx := cc.KeyExchange
+	switch {
+	case kx == "NULL":
+		kl = 0
+	case kx == "RSA" || (cc.Authentication == "RSA" && strings.Contains(kx, "DH")):
+		kl = config.RSABitLength
+	case strings.Contains(kx, "DH"):
+		kl = config.NamedCurveStrength
+	}
+	return kl
+}
+
+//ComputeContextFreeMetric calculates interesting metrics about the cipher
+func (cc *CipherConfig) ComputeContextFreeMetric(config CipherConfigParameters) (metric CipherMetrics) {
+	metric.KeyExchangeStrength = mapKeyExchangeKeylengthToScore(cc.getContextFreeKeyExchangeKeyLength(config))
+	metric.EncryptionKeyStrength = mapEncKeyLengthToScore(cc.GetEncryptionKeyLength())
+	if cc.IsAuthenticated() {
+		metric.Authentication = 100
+	}
+	metric.OverallScore = metric.Authentication % 10
+	return
+}
+
+//CipherConfigParameters contains information about Parameters for determining the key length of key exchange algorithms and other cipher parameters
+type CipherConfigParameters struct {
+	RSABitLength       int //The RSA key from the certificate
+	NamedCurveStrength int
+}
+
+//CipherMetrics are various metrics of interest to compare ciphers as the bases for various desirable property ordering such as security and performance
+type CipherMetrics struct {
+	Authentication        int
+	KeyExchangeStrength   int
+	EncryptionKeyStrength int
+	Performance           int
+	OverallScore          int
+}
+
+//GetCipherConfig extracts a `CipherConfig` using the Cipher's IANA string name
+// Details here https://www.iana.org/assignments/tls-parameters/tls-parameters.txt
+func GetCipherConfig(cipher uint16) (config CipherConfig, err error) {
+	if cipherName, exists := CipherSuiteMap[cipher]; exists {
+		config.CipherID = cipher
+		config.Cipher = cipherName
+		if cipherName == "TLS_EMPTY_RENEGOTIATION_INFO_SCSV" || cipherName == "TLS_FALLBACK_SCSV" {
+			return
+		}
+		cipherName = strings.TrimPrefix(cipherName, "TLS_")
+		cs := strings.Split(cipherName, "_WITH_")
+		if len(cs) != 2 {
+			return config, fmt.Errorf("Expects a cipher name that contains _WITH_ but got %s", config.Cipher)
+		}
+		kxAuth, encMAC := cs[0], cs[1]
+		config.IsExport = strings.Contains(kxAuth, "EXPORT")
+		ka := strings.Split(kxAuth, "_")
+		if len(ka) == 1 {
+			config.KeyExchange = ka[0]
+			config.Authentication = ka[0]
+		}
+		if len(ka) >= 2 {
+			if ka[1] == "EXPORT" {
+				config.KeyExchange = kxAuth
+				config.Authentication = kxAuth
+			} else {
+				config.KeyExchange = ka[0]
+				config.Authentication = ka[1]
+			}
+		}
+
+		em := strings.Split(encMAC, "_")
+		m := em[len(em)-1]
+		if strings.Contains(m, "SHA") || strings.Contains(m, "MD5") || m == "NULL" {
+			config.MACPRF = m
+			config.Encryption = strings.Join(em[:len(em)-1], "_")
+		} else {
+			config.Encryption = encMAC
+		}
 		return
 	}
-	cipher = strings.TrimPrefix(cipher, "TLS_")
-	cs := strings.Split(cipher, "_WITH_")
-	if len(cs) != 2 {
-		return config, fmt.Errorf("Expects a cipher name that contains _WITH_ but got %s", config.Cipher)
-	}
-	kxAuth, encMAC := cs[0], cs[1]
-	config.IsExport = strings.Contains(kxAuth, "EXPORT")
-	ka := strings.Split(kxAuth, "_")
-	if len(ka) == 1 {
-		config.KeyExchange = ka[0]
-		config.Authentication = ka[0]
-	}
-	if len(ka) >= 2 {
-		if ka[1] == "EXPORT" {
-			config.KeyExchange = kxAuth
-			config.Authentication = kxAuth
-		} else {
-			config.KeyExchange = ka[0]
-			config.Authentication = ka[1]
-		}
-	}
-
-	em := strings.Split(encMAC, "_")
-	m := em[len(em)-1]
-	if strings.Contains(m, "SHA") || strings.Contains(m, "MD5") || m == "NULL" {
-		config.MACPRF = m
-		config.Encryption = strings.Join(em[:len(em)-1], "_")
-	} else {
-		config.Encryption = encMAC
-	}
-
-	return
+	return config, fmt.Errorf("The cipher id 0x%x is not recognised", cipher)
 }
 
 //ScanRequest is a model to describe a given TLS Audit scan
@@ -559,6 +604,9 @@ func revokers(cert *x509.Certificate) string {
 
 //ToJSON returns a JSON-formatted string representation of the ScanResult
 func (s ScanResult) ToJSON() (js string) {
+	if data, err := json.Marshal(s.ToStringStruct()); err == nil {
+		return string(data)
+	}
 	return
 }
 
@@ -640,7 +688,6 @@ func (s ScanResult) ToString(config ScanConfig) (result string) {
 	score := s.CalculateScore()
 	result += fmt.Sprintf("\nOverall Grade for %s (%s) on Port %s: %s\n", s.Server, hostname, s.Port, score.Grade)
 	result += fmt.Sprintf("Protocol score: %d, Cipher key exchange score: %d, Cipher encryption score: %d\n", score.ProtocolScore, score.KeyExchangeScore, score.CipherEncryptionScore)
-
 	return
 }
 
@@ -860,7 +907,7 @@ func supportsPFS(scan ScanResult) bool {
 
 	for _, p := range scan.SupportedProtocols {
 		cipher := scan.SelectedCipherByProtocol[p]
-		cc, _ := GetCipherConfig(CipherSuiteMap[cipher])
+		cc, _ := GetCipherConfig(cipher)
 		if !strings.Contains(cc.KeyExchange, "DHE") {
 			pfs = false
 			break
@@ -886,7 +933,7 @@ func supportsAEAD(scan ScanResult) bool {
 					ciphers = scan.CipherSuiteByProtocol[p]
 				}
 				for _, c := range ciphers {
-					cc, _ := GetCipherConfig(CipherSuiteMap[c])
+					cc, _ := GetCipherConfig(c)
 					if strings.Contains(cc.Encryption, "GCM") || strings.Contains(cc.Encryption, "POLY1305") || strings.Contains(cc.Encryption, "CCM") {
 						aead = true
 						break
@@ -954,27 +1001,25 @@ func mapEncKeyLengthToScore(kl int) (score int) {
 }
 
 func selectMinimalKeyExchangeScore(cipher, protocol uint16, keyExchangeScore, cipherStrengthMinScore, cipherStrengthMaxScore *int, scan ScanResult) {
-	if c, ok := CipherSuiteMap[cipher]; ok {
-		if cc, err := GetCipherConfig(c); err == nil {
-			kl := cc.GetKeyExchangeKeyLength(cipher, protocol, scan)
-			if score := mapKeyExchangeKeylengthToScore(kl); score < *keyExchangeScore {
-				*keyExchangeScore = score
-			}
-			ks := cc.GetEncryptionKeyLength()
-			score := mapEncKeyLengthToScore(ks)
-			if *cipherStrengthMinScore > score {
-				*cipherStrengthMinScore = score
-			}
+	if cc, err := GetCipherConfig(cipher); err == nil {
+		kl := cc.GetKeyExchangeKeyLength(cipher, protocol, scan)
+		if score := mapKeyExchangeKeylengthToScore(kl); score < *keyExchangeScore {
+			*keyExchangeScore = score
+		}
+		ks := cc.GetEncryptionKeyLength()
+		score := mapEncKeyLengthToScore(ks)
+		if *cipherStrengthMinScore > score {
+			*cipherStrengthMinScore = score
+		}
 
-			if *cipherStrengthMaxScore < score {
-				*cipherStrengthMaxScore = score
-			}
+		if *cipherStrengthMaxScore < score {
+			*cipherStrengthMaxScore = score
 		}
 	}
 }
 
 func scoreCipher(cipher, protocol uint16, scan ScanResult) (score string) {
-	if cc, err := GetCipherConfig(CipherSuiteMap[cipher]); err == nil {
+	if cc, err := GetCipherConfig(cipher); err == nil {
 		s := (40*mapEncKeyLengthToScore(cc.GetEncryptionKeyLength()) + 30*scoreProtocol(protocol) +
 			30*mapKeyExchangeKeylengthToScore(cc.GetKeyExchangeKeyLength(cipher, protocol, scan))) / 100
 		return toTLSGrade(s)

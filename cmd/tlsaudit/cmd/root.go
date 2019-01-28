@@ -81,17 +81,17 @@ var timeout, rate int
 func init() {
 	// cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().BoolVarP(&jsonOut, "json", "j", false, "generate JSON output")
-	rootCmd.PersistentFlags().BoolVarP(&protocolsOnly, "protocols-only", "p", false, "only check supported protocols - will not do detailed checks on supported ciphers (default: false)")
-	rootCmd.PersistentFlags().BoolVarP(&hideCerts, "hide-certs", "c", false, "suppress certificate information in output (default: false)")
-	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "control whether to produce a running commentary of progress or stay quiet till the end (default: false)")
-	rootCmd.PersistentFlags().IntVarP(&timeout, "timeout", "t", 5, "TIMEOUT (in seconds) to adjust how much we are willing to wait for servers to come back with responses. Smaller timeout sacrifices accuracy for speed")
-	rootCmd.PersistentFlags().IntVarP(&rate, "rate", "r", 1000, "the rate (in packets per second) that we should use to scan for open ports")
-	rootCmd.PersistentFlags().StringVarP(&output, "output", "o", "tlsaudit.txt", `write results into an output FILE`)
+	rootCmd.Flags().BoolVarP(&jsonOut, "json", "j", false, "generate JSON output")
+	rootCmd.Flags().BoolVarP(&protocolsOnly, "protocols-only", "p", false, "only check supported protocols - will not do detailed checks on supported ciphers (default: false)")
+	rootCmd.Flags().BoolVarP(&hideCerts, "hide-certs", "c", false, "suppress certificate information in output (default: false)")
+	rootCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "control whether to produce a running commentary of progress or stay quiet till the end (default: false)")
+	rootCmd.Flags().IntVarP(&timeout, "timeout", "t", 5, "TIMEOUT (in seconds) to adjust how much we are willing to wait for servers to come back with responses. Smaller timeout sacrifices accuracy for speed")
+	rootCmd.Flags().IntVarP(&rate, "rate", "r", 1000, "the rate (in packets per second) that we should use to scan for open ports")
+	rootCmd.Flags().StringVarP(&output, "output", "o", "tlsaudit.txt", `write results into an output FILE`)
 	rootCmd.Flag("output").NoOptDefVal = "tlsaudit.txt"
-	rootCmd.PersistentFlags().StringVarP(&input, "input", "i", "tlsaudit_input.txt", `read the CIDR range, IPs and domains to scan from an input FILE separated by commas, or newlines`)
+	rootCmd.Flags().StringVarP(&input, "input", "i", "tlsaudit_input.txt", `read the CIDR range, IPs and domains to scan from an input FILE separated by commas, or newlines`)
 	rootCmd.Flag("input").NoOptDefVal = "tlsaudit_input.txt"
-	rootCmd.PersistentFlags().StringVarP(&service, "service", "s", tlsaudit.TLSAuditConfigPath, fmt.Sprintf("run %s as a service", app))
+	rootCmd.Flags().StringVarP(&service, "service", "s", tlsaudit.TLSAuditConfigPath, fmt.Sprintf("run %s as a service", app))
 	rootCmd.Flag("service").NoOptDefVal = tlsaudit.TLSAuditConfigPath
 }
 

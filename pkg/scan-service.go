@@ -87,10 +87,8 @@ func getIPsToScan(config tlsmodel.TLSAuditConfig) []string {
 		for _, ip := range cidr.Expand(c) {
 			println(ip)
 			if _, present := data[ip]; !present {
-				if hosts, err := net.LookupAddr(ip); err == nil && len(hosts) > 0 {
-					data[ip] = true
-					ips = append(ips, ip)
-				}
+				data[ip] = true
+				ips = append(ips, ip)
 			}
 		}
 	}

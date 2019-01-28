@@ -16,3 +16,5 @@ require (
 	golang.org/x/crypto v0.0.0-20190103213133-ff983b9c42bc
 	gopkg.in/yaml.v2 v2.2.2
 )
+
+replace github.com/adedayo/tcpscan v0.3.0 => /Users/aadetoye/softdev/opensrc/go/src/github.com/adedayo/tcpscan

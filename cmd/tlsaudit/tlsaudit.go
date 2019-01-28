@@ -34,7 +34,7 @@ import (
 )
 
 var (
-	version = "0.2.0" // deployed version will be taken from release tags
+	version = "0.0.0" // deployed version will be taken from release tags
 )
 
 func main() {
