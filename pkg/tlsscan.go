@@ -59,8 +59,8 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 					cname, err := net.LookupCNAME(ack.Host)
 					if err == nil {
 						domain = cname
-						hostnames[ack.Host] = cname
 					}
+					hostnames[ack.Host] = domain
 					println("Finished Looking up", ack.Host, " Got :", cname)
 				} else {
 					domain = hostnames[ack.Host]
