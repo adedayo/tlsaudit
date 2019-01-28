@@ -37,7 +37,6 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 		}
 	}()
 	go func() {
-		defer close(scanResults)
 		fmt.Printf("Scanning TLS for host %s using IP addresses\n", cidr)
 		scan := make(map[string]portscan.PortACK)
 		ackChannels := []<-chan portscan.PortACK{}
@@ -81,6 +80,7 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 			fmt.Printf("Got Merged Scan result of Server %s:%s\n", res.Server, res.Port)
 			scanResults <- res
 		}
+		close(scanResults)
 	}()
 	return scanResults
 }
