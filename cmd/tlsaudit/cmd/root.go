@@ -75,7 +75,7 @@ func Execute(version string) {
 }
 
 var output, input, service string
-var jsonOut, protocolsOnly, hideCerts, quiet bool
+var jsonOut, protocolsOnly, hideCerts, quiet, cipherMetrics bool
 var timeout, rate int
 
 func init() {
@@ -93,6 +93,8 @@ func init() {
 	rootCmd.Flag("input").NoOptDefVal = "tlsaudit_input.txt"
 	rootCmd.Flags().StringVarP(&service, "service", "s", tlsaudit.TLSAuditConfigPath, fmt.Sprintf("run %s as a service", app))
 	rootCmd.Flag("service").NoOptDefVal = tlsaudit.TLSAuditConfigPath
+	rootCmd.Flags().BoolVarP(&cipherMetrics, "show-cipher-metrics", "m", false, "enumerate all ciphers and show associated security and performance metrics (default: false)")
+
 }
 
 // // initConfig reads in config file and ENV variables if set.
@@ -123,7 +125,11 @@ func init() {
 
 func runner(cmd *cobra.Command, args []string) error {
 
-	println("Running command")
+	if cmd.Flag("show-cipher-metrics").Changed {
+		println("Showing cipher metrics")
+		showCipherMetrics()
+		return nil
+	}
 	if len(args) == 0 && !cmd.Flag("service").Changed && !cmd.Flag("input").Changed {
 		return cmd.Usage()
 	}
@@ -323,4 +329,12 @@ func generateResultText(r tlsmodel.ScanResult, currentServerInput string) (resul
 		}
 	}
 	return
+}
+
+func showCipherMetrics() {
+	metrics := tlsmodel.EnumerateCipherMetrics()
+	fmt.Printf("| %-15s | %-18s | %-16s | %-15s | %-50s |\n", "Preference Index", "Cipher ID", "Security Score", "Performance Cost", "Cipher Suite")
+	for index, metric := range metrics {
+		fmt.Printf("| %-16d | 0x%04x %11s | %2d %13s | %-16d | %-50s |\n", index+1, metric.CipherConfig.CipherID, "", metric.OverallScore, "", metric.Performance, metric.CipherConfig.Cipher)
+	}
 }

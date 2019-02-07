@@ -28,18 +28,294 @@ const (
 
 //CipherConfig extracts the important elements of a Ciphersuit based on its name
 type CipherConfig struct {
-	CipherID       uint16
-	Cipher         string
-	KeyExchange    string
-	Authentication string
-	IsExport       bool
-	Encryption     string
-	MACPRF         string //MAC (TLS <=1.1) or PseudoRandomFunction (TLS >= 1.2)
+	CipherID               uint16
+	Cipher                 string
+	KeyExchange            string
+	Authentication         string
+	IsExport               bool
+	SupportsForwardSecrecy bool
+	Encryption             string
+	MACPRF                 string //MAC (TLS <=1.1) or PseudoRandomFunction (TLS >= 1.2)
 }
 
 //IsAuthenticated returns whether the cipher supports authentication
 func (cc *CipherConfig) IsAuthenticated() bool {
 	return !(cc.Authentication == "NULL" || cc.Authentication == "anon")
+}
+
+func rsaPerformanceMultiplier(keyLength int) int {
+	switch keyLength {
+	case 1024:
+		return 2
+	case 2048:
+		return 4
+	case 3072:
+		return 8
+	default:
+		return 10
+
+	}
+}
+
+func dhPerformanceMultiplier(keyLength int) int {
+	switch keyLength {
+	case 1024:
+		return 1
+	case 2048:
+		return 2
+	case 3072:
+		return 3
+	default:
+		return 10
+
+	}
+}
+func (cc *CipherConfig) getKXPerfMultiplier(config CipherConfigParameters) int {
+	if cc.usesRSAKeyExchange() {
+		return rsaPerformanceMultiplier(config.RSABitLength)
+	}
+	if cc.usesDHKeyExchange() {
+		return dhPerformanceMultiplier(config.NamedCurveStrength)
+	}
+	return 10
+}
+
+func (cc *CipherConfig) getKXPerf(config CipherConfigParameters) int {
+	switch cc.KeyExchange {
+	case "NULL":
+		return 1
+	case "ECDH":
+		return 2 * cc.getKXPerfMultiplier(config)
+	case "ECDHE":
+		return 3 * cc.getKXPerfMultiplier(config)
+	case "RSA":
+		return 4 * cc.getKXPerfMultiplier(config)
+	case "DH":
+		return 5 * cc.getKXPerfMultiplier(config)
+	case "DHE":
+		return 6 * cc.getKXPerfMultiplier(config)
+	case "KRB5": //from here is arbitrary - don't care
+		return 100
+	case "PSK":
+		return 100
+	case "ECCPWD":
+		return 100
+	case "SRP":
+		return 100
+
+	}
+	if strings.Contains(cc.Cipher, "SCSV") {
+		//these are signalling ciphers just return a large multiplier
+		return 100
+	}
+	return -1
+}
+
+func (cc *CipherConfig) getAuthPerf() int {
+	switch cc.Authentication {
+	case "anon":
+		return 1
+	case "NULL":
+		return 1
+	case "ECDSA":
+		return 2
+	case "SHA":
+		return 3
+	case "RSA":
+		return 4
+	case "DHE":
+		return 5
+	case "DSS": //from here is arbitrary - don't care
+		return 10
+	case "PSK":
+		return 10
+	case "KRB5":
+		return 10
+	case "ECCPWD":
+		return 10
+	case "SRP":
+		return 10
+
+	}
+	if strings.Contains(cc.Cipher, "SCSV") {
+		//these are signalling ciphers just return a large multiplier
+		return 10
+	}
+	return -1
+}
+
+func (cc *CipherConfig) getMACPRFPerf() int {
+	switch cc.MACPRF {
+	case "NULL":
+		return 1
+	case "MD5":
+		return 2
+	case "SHA":
+		return 3
+	case "SHA256":
+		return 4
+	case "SHA384":
+		return 5
+	}
+	if strings.Contains(cc.Cipher, "SCSV") {
+		//these are signalling ciphers just return a large multiplier
+		return 10
+	}
+	return -1
+}
+
+func (cc *CipherConfig) getEncAlg() string {
+	alg := strings.Split(cc.Encryption, "_")
+
+	switch alg[0] {
+	case "NULL":
+		return "NULL"
+	case "AES":
+		return "AES"
+	case "CAMELLIA":
+		return "CAMELLIA"
+	case "DES":
+		return "DES"
+	case "CHACHA20":
+		return "CHACHA20"
+	case "DES40":
+		return "DES40"
+	case "IDEA":
+		return "IDEA"
+	case "ARIA":
+		return "ARIA"
+	case "RC4":
+		return "RC4"
+	case "RC2":
+		return "RC2"
+	case "SEED":
+		return "SEED"
+	case "3DES":
+		if len(alg) > 1 && alg[1] == "EDE" {
+			return "3DES_EDE"
+		}
+		return "NA"
+
+	}
+	if strings.Contains(cc.Cipher, "SCSV") {
+		//these are signalling ciphers just return a large multiplier
+		return "NA"
+	}
+	return "NA"
+}
+
+func (cc *CipherConfig) getEncAlgPerf() int {
+	switch cc.getEncAlg() {
+	case "NULL":
+		return 1
+	case "AES":
+		return 2
+	case "RC2":
+		return 3
+	case "RC4":
+		return 3
+	case "CAMELLIA":
+		return 4
+	case "CHACHA20":
+		return 4
+	case "SEED":
+		return 5
+	case "DES40":
+		return 6
+	case "DES":
+		return 6
+	case "3DES_EDE":
+		return 7
+	case "ARIA": //from here is arbitrary - don't care
+		return 10
+	case "IDEA":
+		return 10
+	}
+	if strings.Contains(cc.Cipher, "SCSV") {
+		//these are signalling ciphers just return a large multiplier
+		return 10
+	}
+	return -1
+}
+
+func (cc *CipherConfig) getEncKeyPerf() int {
+	switch cc.GetEncryptionKeyLength() {
+	case 0:
+		return 1
+	case 40:
+		return 2
+	case 56:
+		return 3
+	case 112:
+		return 4
+	case 128:
+		return 5
+	case 256:
+		return 6
+
+	}
+	if strings.Contains(cc.Cipher, "SCSV") {
+		//these are signalling ciphers just return a large multiplier
+		return 10
+	}
+	return -1
+}
+
+func (cc *CipherConfig) getEncMode() string {
+	if strings.Contains(cc.Encryption, "CBC") {
+		return "CBC"
+	}
+
+	if strings.Contains(cc.Encryption, "CCM_8") {
+		return "CCM_8"
+	}
+
+	if strings.Contains(cc.Encryption, "RC4") {
+		return "RC4"
+	}
+	mode := strings.Split(cc.Encryption, "_")
+
+	switch mode[len(mode)-1] {
+	case "GCM":
+		return "GCM"
+	case "CBC":
+		return "CBC"
+	case "CCM":
+		return "CCM"
+	case "MD5":
+		return "MD5"
+	case "NULL":
+		return "NULL"
+	case "POLY1305":
+		return "POLY1305"
+	}
+	return mode[len(mode)-1]
+}
+
+func (cc *CipherConfig) getEncModePerf() int {
+	switch cc.getEncMode() {
+	case "NULL":
+		return 1
+	case "GCM":
+		return 2
+	case "MD5":
+		return 3
+	case "RC4":
+		return 3
+	case "POLY1305":
+		return 4
+	case "CCM":
+		return 4
+	case "CCM_8":
+		return 4
+	case "CBC":
+		return 5
+	}
+	if strings.Contains(cc.Cipher, "SCSV") {
+		//these are signalling ciphers just return a large multiplier
+		return 10
+	}
+	return -1
 }
 
 //GetEncryptionKeyLength returns the effective key lengths of encryption algorithms used in the cipher
@@ -115,17 +391,31 @@ func (cc *CipherConfig) GetKeyExchangeKeyLength(cipher, protocol uint16, scan Sc
 
 //getContextFreeKeyExchangeKeyLength returns the key length indicated by the cipher and key exchange config
 func (cc *CipherConfig) getContextFreeKeyExchangeKeyLength(config CipherConfigParameters) int {
-	kl := -1
-	kx := cc.KeyExchange
-	switch {
-	case kx == "NULL":
-		kl = 0
-	case kx == "RSA" || (cc.Authentication == "RSA" && strings.Contains(kx, "DH")):
-		kl = config.RSABitLength
-	case strings.Contains(kx, "DH"):
-		kl = config.NamedCurveStrength
+	if cc.KeyExchange == "NULL" {
+		return 0
 	}
-	return kl
+	if cc.usesRSAKeyExchange() {
+		return config.RSABitLength
+	}
+	if cc.usesDHKeyExchange() {
+		return config.NamedCurveStrength
+	}
+	return -1
+}
+
+func (cc *CipherConfig) usesRSAKeyExchange() bool {
+	kx := cc.KeyExchange
+	if kx == "RSA" || (cc.Authentication == "RSA" && strings.Contains(kx, "DH")) {
+		return true
+	}
+	return false
+}
+
+func (cc *CipherConfig) usesDHKeyExchange() bool {
+	if cc.Authentication != "RSA" && strings.Contains(cc.KeyExchange, "DH") {
+		return true
+	}
+	return false
 }
 
 //ComputeContextFreeMetric calculates interesting metrics about the cipher
@@ -135,7 +425,106 @@ func (cc *CipherConfig) ComputeContextFreeMetric(config CipherConfigParameters) 
 	if cc.IsAuthenticated() {
 		metric.Authentication = 100
 	}
-	metric.OverallScore = metric.Authentication % 10
+	metric.MacPRF = cc.GetMACPRFStrength()
+	metric.Performance = cc.getPerformanceMetric(config)
+	if cc.SupportsForwardSecrecy {
+		metric.ForwardSecrecy = 100
+	}
+	metric.ConfigParams = config
+	metric.CipherConfig = *cc
+	metric.OverallScore = (10*metric.Authentication + 30*metric.ForwardSecrecy + 10*metric.KeyExchangeStrength +
+		40*metric.EncryptionKeyStrength + 10*metric.MacPRF) / 100
+	return
+}
+
+func (cc *CipherConfig) getPerformanceMetric(config CipherConfigParameters) int {
+	return ((cc.getKXPerf(config)) * cc.getAuthPerf() * cc.getEncAlgPerf() * cc.getEncKeyPerf() *
+		cc.getEncModePerf() * cc.getMACPRFPerf())
+}
+
+//GetMACPRFStrength returns the relative strength of the MAC/PRF algorithm
+func (cc *CipherConfig) GetMACPRFStrength() int {
+	if strings.Contains(cc.Cipher, "SCSV") {
+		return 0
+	}
+	strength := -1
+	switch cc.MACPRF {
+	case "SHA384":
+		strength = 100
+	case "SHA256":
+		strength = 90
+	case "SHA":
+		strength = 50
+	case "MD5":
+		strength = 20
+	case "NULL":
+		strength = 0
+	default:
+		strength = -1
+	}
+	return strength
+}
+
+//EnumerateCipherMetrics enumerates metrics for ciphers along multiple config axes
+func EnumerateCipherMetrics() (metrics []CipherMetrics) {
+	strengthToNamedCurves := make(map[int][]string)
+
+	for nc, kx := range NamedCurveStrength {
+		if kx >= 0 && kx == 3072 {
+			if ncs, present := strengthToNamedCurves[kx]; present {
+				strengthToNamedCurves[kx] = append(ncs, NamedCurves[nc])
+			} else {
+				strengthToNamedCurves[kx] = []string{NamedCurves[nc]}
+			}
+		}
+	}
+	// RSALengths := []int{1024, 2048, 3072}
+	RSALengths := []int{2048}
+
+	rsaParams := []CipherConfigParameters{}
+	for _, rsa := range RSALengths {
+		rsaParams = append(rsaParams, CipherConfigParameters{
+			RSABitLength: rsa,
+		})
+	}
+
+	dheParams := []CipherConfigParameters{}
+	for kx := range strengthToNamedCurves {
+		dheParams = append(dheParams, CipherConfigParameters{
+			NamedCurveStrength: kx,
+			NamedCurves:        strengthToNamedCurves[kx],
+		})
+	}
+
+	ccs := []CipherConfig{}
+
+	dummyConfig := CipherConfigParameters{}
+	for c := range CipherSuiteMap {
+		if cc, err := GetCipherConfig(c); err == nil {
+			ccs = append(ccs, cc)
+		}
+	}
+	for _, cc := range ccs {
+		if cc.usesRSAKeyExchange() {
+			for _, param := range rsaParams {
+				m := cc.ComputeContextFreeMetric(param)
+				metrics = append(metrics, m)
+			}
+			continue
+		}
+
+		if cc.usesDHKeyExchange() {
+			for _, param := range dheParams {
+				m := cc.ComputeContextFreeMetric(param)
+				metrics = append(metrics, m)
+			}
+			continue
+		}
+
+		m := cc.ComputeContextFreeMetric(dummyConfig)
+		metrics = append(metrics, m)
+	}
+	sort.Sort(CipherMetricsSorter(metrics))
 	return
 }
 
@@ -143,15 +532,20 @@ func (cc *CipherConfig) ComputeContextFreeMetric(config CipherConfigParameters) 
 type CipherConfigParameters struct {
 	RSABitLength       int //The RSA key from the certificate
 	NamedCurveStrength int
+	NamedCurves        []string //The named curves that have the indicated strength
 }
 
 //CipherMetrics are various metrics of interest to compare ciphers as the bases for various desirable property ordering such as security and performance
 type CipherMetrics struct {
 	Authentication        int
 	KeyExchangeStrength   int
+	ForwardSecrecy        int
 	EncryptionKeyStrength int
+	MacPRF                int
 	Performance           int
 	OverallScore          int
+	ConfigParams          CipherConfigParameters
+	CipherConfig          CipherConfig
 }
 
 //GetCipherConfig extracts a `CipherConfig` using the Cipher's IANA string name
@@ -177,12 +571,16 @@ func GetCipherConfig(cipher uint16) (config CipherConfig, err error) {
 		}
 		if len(ka) >= 2 {
 			if ka[1] == "EXPORT" {
-				config.KeyExchange = kxAuth
-				config.Authentication = kxAuth
+				config.KeyExchange = ka[0]
+				config.Authentication = ka[0]
 			} else {
 				config.KeyExchange = ka[0]
 				config.Authentication = ka[1]
 			}
+		}
+
+		if strings.Contains(config.KeyExchange, "DHE") {
+			config.SupportsForwardSecrecy = true
 		}
 
 		em := strings.Split(encMAC, "_")
@@ -190,6 +588,9 @@ func GetCipherConfig(cipher uint16) (config CipherConfig, err error) {
 		if strings.Contains(m, "SHA") || strings.Contains(m, "MD5") || m == "NULL" {
 			config.MACPRF = m
 			config.Encryption = strings.Join(em[:len(em)-1], "_")
+		} else if strings.Contains(encMAC, "CCM") {
+			config.MACPRF = "SHA256" // see https://tools.ietf.org/html/rfc6655#section-4
+			config.Encryption = encMAC
 		} else {
 			config.Encryption = encMAC
 		}
