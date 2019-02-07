@@ -171,6 +171,8 @@ func mergeHelloKeyChannels(channels ...<-chan tlsmodel.HelloAndKey) <-chan tlsmo
 
 //scanHost finds whether a port on a host supports TLS and if so what protocols and ciphers are supported
 func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverName string) chan tlsmodel.ScanResult {
+	fmt.Printf("Scanning %#v\n", hostPort)
+
 	resultChannel := make(chan tlsmodel.ScanResult)
 	patientTimeout = time.Duration(config.Timeout) * time.Second
 	go func() {
@@ -349,9 +351,9 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 				if out.Preference {
 					result.CipherPreferenceOrderByProtocol[vers] = out.Ciphers
 				}
-
 			}
 		}
+		fmt.Printf("Got result %#v\n", result)
 		resultChannel <- result
 	}()
 	return resultChannel
