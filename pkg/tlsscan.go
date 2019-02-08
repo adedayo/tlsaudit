@@ -43,7 +43,7 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 		result := portscan.ScanCIDR(portscan.ScanConfig{
 			Timeout:          config.Timeout,
 			PacketsPerSecond: config.PacketsPerSecond,
-			Quiet:            true,
+			Quiet:            false,
 		}, cidr)
 		ackChannels = append(ackChannels, result)
 		hostnames := make(map[string]string)
