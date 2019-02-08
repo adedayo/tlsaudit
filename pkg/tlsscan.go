@@ -38,16 +38,17 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 	}()
 	go func() {
 		scan := make(map[string]portscan.PortACK)
-		ackChannels := []<-chan portscan.PortACK{}
+		// ackChannels := []<-chan portscan.PortACK{}
 		resultChannels := []<-chan tlsmodel.ScanResult{}
+		println("Scanning CIDR", cidr)
 		result := portscan.ScanCIDR(portscan.ScanConfig{
 			Timeout:          config.Timeout,
 			PacketsPerSecond: config.PacketsPerSecond,
 			Quiet:            false,
 		}, cidr)
-		ackChannels = append(ackChannels, result)
+		// ackChannels = append(ackChannels, result)
 		hostnames := make(map[string]string)
-		for ack := range mergeACKChannels(ackChannels...) {
+		for ack := range result {
 			fmt.Printf("Got Open: %t ACK %#v\n", ack.IsOpen(), ack)
 			if ack.IsOpen() {
 				port := strings.Split(ack.Port, "(")[0]
@@ -103,6 +104,7 @@ func mergeACKChannels(ackChannels ...<-chan portscan.PortACK) <-chan portscan.Po
 
 //MergeResultChannels as suggested
 func MergeResultChannels(channels ...<-chan tlsmodel.ScanResult) <-chan tlsmodel.ScanResult {
+	println("length of result channel", len(channels))
 	var wg sync.WaitGroup
 	out := make(chan tlsmodel.ScanResult)
 	output := func(c <-chan tlsmodel.ScanResult) {
@@ -117,8 +119,11 @@ func MergeResultChannels(channels ...<-chan tlsmodel.ScanResult) <-chan tlsmodel
 	}
 
 	go func() {
+		println("waiting")
 		wg.Wait()
+		println("closing")
 		close(out)
+		println("closed")
 	}()
 	return out
 }
