@@ -258,6 +258,7 @@ func runTLSScan(ipSource func() []string, ipToHostnameResolver func(string) stri
 		fmt.Printf("Scanning Host %s (%d of %d)\n", host, counter, count)
 		results = append(results, ScanCIDRTLS(host, psr.Request.Config))
 		for result := range MergeResultChannels(results...) {
+			fmt.Printf("Got Merged Channel Result %#v\n", result)
 			key := result.Server + result.Port
 			if _, present := scan[key]; !present {
 				scan[key] = result

@@ -48,6 +48,7 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 		ackChannels = append(ackChannels, result)
 		hostnames := make(map[string]string)
 		for ack := range mergeACKChannels(ackChannels...) {
+			fmt.Printf("Got Open: %t ACK %#v\n", ack.IsOpen(), ack)
 			if ack.IsOpen() {
 				port := strings.Split(ack.Port, "(")[0]
 				key := ack.Host + ack.Port
@@ -72,6 +73,7 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 			}
 		}
 		for res := range MergeResultChannels(resultChannels...) {
+			fmt.Printf("Merged result %#v\n", res)
 			scanResults <- res
 		}
 		close(scanResults)
