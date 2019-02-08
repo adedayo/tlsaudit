@@ -3,7 +3,7 @@ module github.com/adedayo/tlsaudit
 require (
 	github.com/AndreasBriese/bbloom v0.0.0-20180913140656-343706a395b7 // indirect
 	github.com/adedayo/cidr v0.1.3
-	github.com/adedayo/tcpscan v0.0.0-20190208164431-5fbc18e0ff23
+	github.com/adedayo/tcpscan v0.0.0-20190208171608-a0c98dd4d895
 	github.com/carlescere/scheduler v0.0.0-20170109141437-ee74d2f83d82
 	github.com/dgraph-io/badger v1.5.5-0.20181004181505-439fd464b155
 	github.com/dgryski/go-farm v0.0.0-20190104051053-3adb47b1fb0f // indirect
