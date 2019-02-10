@@ -37,6 +37,7 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 		}
 	}()
 	go func() {
+		defer close(scanResults)
 		scan := make(map[string]portscan.PortACK)
 		// ackChannels := []<-chan portscan.PortACK{}
 		resultChannels := []<-chan tlsmodel.ScanResult{}
@@ -55,16 +56,21 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 				key := ack.Host + ack.Port
 				domain := ""
 				if _, present := hostnames[ack.Host]; !present {
+					println("Looking up CNAME")
+					t := time.Now()
 					cname, err := net.LookupCNAME(ack.Host)
 					if err == nil {
+						println("Got CNAME", cname)
 						domain = cname
 					}
+					println("Domain name: ", domain, "in", time.Since(t).Seconds(), "seconds")
 					hostnames[ack.Host] = domain
 				} else {
 					domain = hostnames[ack.Host]
 				}
 				if _, present := scan[key]; !present {
 					scan[key] = ack
+					println("About to scan", ack.Host, ack.Port)
 					channel := scanHost(tlsmodel.HostAndPort{
 						Hostname: ack.Host,
 						Port:     port,
@@ -77,7 +83,6 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 			fmt.Printf("Merged result %#v\n", res)
 			scanResults <- res
 		}
-		close(scanResults)
 	}()
 	return scanResults
 }
