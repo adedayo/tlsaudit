@@ -40,16 +40,14 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 		scan := make(map[string]portscan.PortACK)
 		// ackChannels := []<-chan portscan.PortACK{}
 		resultChannels := []<-chan tlsmodel.ScanResult{}
-		println("Scanning CIDR", cidr)
 		result := portscan.ScanCIDR(portscan.ScanConfig{
 			Timeout:          config.Timeout,
 			PacketsPerSecond: config.PacketsPerSecond,
-			Quiet:            false,
+			Quiet:            true,
 		}, cidr)
 		// ackChannels = append(ackChannels, result)
 		hostnames := make(map[string]string)
 		for ack := range result {
-			fmt.Printf("Got Open: %t ACK %#v\n", ack.IsOpen(), ack)
 			if ack.IsOpen() {
 				port := strings.Split(ack.Port, "(")[0]
 				key := ack.Host + ack.Port
@@ -74,7 +72,6 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 			}
 		}
 		for res := range MergeResultChannels(resultChannels...) {
-			fmt.Printf("Merged result %#v\n", res)
 			scanResults <- res
 		}
 		close(scanResults)
@@ -104,7 +101,6 @@ func mergeACKChannels(ackChannels ...<-chan portscan.PortACK) <-chan portscan.Po
 
 //MergeResultChannels as suggested
 func MergeResultChannels(channels ...<-chan tlsmodel.ScanResult) <-chan tlsmodel.ScanResult {
-	println("length of result channel", len(channels))
 	var wg sync.WaitGroup
 	out := make(chan tlsmodel.ScanResult)
 	output := func(c <-chan tlsmodel.ScanResult) {
@@ -119,11 +115,8 @@ func MergeResultChannels(channels ...<-chan tlsmodel.ScanResult) <-chan tlsmodel
 	}
 
 	go func() {
-		println("waiting")
 		wg.Wait()
-		println("closing")
 		close(out)
-		println("closed")
 	}()
 	return out
 }
@@ -178,12 +171,10 @@ func mergeHelloKeyChannels(channels ...<-chan tlsmodel.HelloAndKey) <-chan tlsmo
 
 //scanHost finds whether a port on a host supports TLS and if so what protocols and ciphers are supported
 func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverName string) <-chan tlsmodel.ScanResult {
-	fmt.Printf("Scanning %#v\n", hostPort)
-
 	resultChannel := make(chan tlsmodel.ScanResult)
-	defer close(resultChannel)
 	patientTimeout = time.Duration(config.Timeout) * time.Second
 	go func() {
+		defer close(resultChannel)
 		host := hostPort.Hostname
 		port := hostPort.Port
 		hostnameWithPort := fmt.Sprintf("%s:%s", host, port)
@@ -229,7 +220,6 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 		//chech support for TLS_FALLBACK_SCSV
 		checkFallbackSCSVSupport(&result, hostnameWithPort, serverName, patientTimeout)
 
-		// fmt.Printf("Got result %s, %s, %#v \n", result.Server, result.Port, result.SupportedProtocols)
 		if !config.ProtocolsOnly {
 			//now test each cipher for only the supported protocols
 			outChannels := []<-chan tlsmodel.HelloAndKey{}
@@ -360,7 +350,6 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 				}
 			}
 		}
-		fmt.Printf("Got result %#v\n", result)
 		resultChannel <- result
 	}()
 	return resultChannel
