@@ -16,6 +16,8 @@ github.com/adedayo/tcpscan v0.0.0-20190208195613-01ce76c27bc0 h1:/gAiOB5LrTmW5UF
 github.com/adedayo/tcpscan v0.0.0-20190208195613-01ce76c27bc0/go.mod h1:V4BbfuzhchhRXT/uyJiNxysE4nadq2t6kfXdFJkXQ2k=
 github.com/adedayo/tcpscan v0.0.0-20190210235833-4c862c1d25f2 h1:frFxUZ5GHFMRCkYWLH9vpBSdwlwv12BCZeCuXH8dCuE=
 github.com/adedayo/tcpscan v0.0.0-20190210235833-4c862c1d25f2/go.mod h1:V4BbfuzhchhRXT/uyJiNxysE4nadq2t6kfXdFJkXQ2k=
+github.com/adedayo/tcpscan v0.0.0-20190211010232-c75c122a93bf h1:oIJEElA+6WEY4jxncF38aP6IuV/dgc8SQzsl6LBxsqM=
+github.com/adedayo/tcpscan v0.0.0-20190211010232-c75c122a93bf/go.mod h1:V4BbfuzhchhRXT/uyJiNxysE4nadq2t6kfXdFJkXQ2k=
 github.com/adedayo/tcpscan v0.2.28 h1:J4clqr96yvEcAJMZ0iNmIReACgQYdlDIobvw3EGBuk4=
 github.com/adedayo/tcpscan v0.2.28/go.mod h1:YQcmrHBKq/MeDZQM1sE3xs44SvjSaTzQvfEjd53u0kE=
 github.com/adedayo/tcpscan v0.3.0 h1:pJBmq0/ZgIVYOcql8GVpHqoEJmsYaOf4r1aODFPx/Jk=
