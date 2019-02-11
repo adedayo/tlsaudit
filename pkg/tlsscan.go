@@ -40,7 +40,6 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 		defer close(scanResults)
 		scan := make(map[string]portscan.PortACK)
 		resultChannels := []<-chan tlsmodel.ScanResult{}
-		println("Scanning CIDR", cidr)
 		result := portscan.ScanCIDR(portscan.ScanConfig{
 			Timeout:          config.Timeout,
 			PacketsPerSecond: config.PacketsPerSecond,
@@ -48,9 +47,8 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 		}, cidr)
 
 		select {
-		case <-time.After(20 * time.Duration(config.Timeout) * time.Second):
-			//Timeout if port scan doesn't terminate in time
-			println("Timed out!!!!!")
+		case <-time.After(12 * time.Duration(config.Timeout) * time.Second):
+			//Timeout (in a minute by default) if port scan doesn't terminate in time
 			return
 		case <-func() chan bool {
 			out := make(chan bool)
@@ -64,21 +62,16 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 						key := ack.Host + ack.Port
 						domain := ""
 						if _, present := hostnames[ack.Host]; !present {
-							println("Looking up CNAME")
-							t := time.Now()
 							cname, err := net.LookupCNAME(ack.Host)
 							if err == nil {
-								println("Got CNAME", cname)
 								domain = cname
 							}
-							println("Domain name: ", domain, "in", time.Since(t).Seconds(), "seconds")
 							hostnames[ack.Host] = domain
 						} else {
 							domain = hostnames[ack.Host]
 						}
 						if _, present := scan[key]; !present {
 							scan[key] = ack
-							println("About to scan", ack.Host, ack.Port)
 							channel := scanHost(tlsmodel.HostAndPort{
 								Hostname: ack.Host,
 								Port:     port,
@@ -87,9 +80,7 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 						}
 					}
 				}
-				println("out of portscan result loop")
 				for res := range MergeResultChannels(resultChannels...) {
-					fmt.Printf("Merged result %#v\n", res)
 					scanResults <- res
 				}
 			}()
@@ -123,7 +114,6 @@ func mergeACKChannels(ackChannels ...<-chan portscan.PortACK) <-chan portscan.Po
 
 //MergeResultChannels as suggested
 func MergeResultChannels(channels ...<-chan tlsmodel.ScanResult) <-chan tlsmodel.ScanResult {
-	println("length of result channel", len(channels))
 	var wg sync.WaitGroup
 	out := make(chan tlsmodel.ScanResult)
 	output := func(c <-chan tlsmodel.ScanResult) {
@@ -138,11 +128,8 @@ func MergeResultChannels(channels ...<-chan tlsmodel.ScanResult) <-chan tlsmodel
 	}
 
 	go func() {
-		println("waiting")
 		wg.Wait()
-		println("closing")
 		close(out)
-		println("closed")
 	}()
 	return out
 }
@@ -197,8 +184,6 @@ func mergeHelloKeyChannels(channels ...<-chan tlsmodel.HelloAndKey) <-chan tlsmo
 
 //scanHost finds whether a port on a host supports TLS and if so what protocols and ciphers are supported
 func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverName string) chan tlsmodel.ScanResult {
-	fmt.Printf("Scanning %#v\n", hostPort)
-
 	resultChannel := make(chan tlsmodel.ScanResult)
 	patientTimeout = time.Duration(config.Timeout) * time.Second
 	go func() {
@@ -379,7 +364,6 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 				}
 			}
 		}
-		fmt.Printf("Got result %#v\n", result)
 		resultChannel <- result
 	}()
 	return resultChannel
