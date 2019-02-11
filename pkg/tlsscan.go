@@ -39,49 +39,63 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 	go func() {
 		defer close(scanResults)
 		scan := make(map[string]portscan.PortACK)
-		// ackChannels := []<-chan portscan.PortACK{}
 		resultChannels := []<-chan tlsmodel.ScanResult{}
 		println("Scanning CIDR", cidr)
 		result := portscan.ScanCIDR(portscan.ScanConfig{
 			Timeout:          config.Timeout,
 			PacketsPerSecond: config.PacketsPerSecond,
-			Quiet:            false,
+			Quiet:            true,
 		}, cidr)
-		// ackChannels = append(ackChannels, result)
-		hostnames := make(map[string]string)
-		for ack := range result {
-			fmt.Printf("Got Open: %t ACK %#v\n", ack.IsOpen(), ack)
-			if ack.IsOpen() {
-				port := strings.Split(ack.Port, "(")[0]
-				key := ack.Host + ack.Port
-				domain := ""
-				if _, present := hostnames[ack.Host]; !present {
-					println("Looking up CNAME")
-					t := time.Now()
-					cname, err := net.LookupCNAME(ack.Host)
-					if err == nil {
-						println("Got CNAME", cname)
-						domain = cname
+
+		select {
+		case <-time.After(20 * time.Duration(config.Timeout) * time.Second):
+			//Timeout if port scan doesn't terminate in time
+			println("Timed out!!!!!")
+			return
+		case <-func() chan bool {
+			out := make(chan bool)
+			go func() {
+				defer close(out)
+				hostnames := make(map[string]string)
+				for ack := range result {
+					// fmt.Printf("Got %s ACK %#v\n", ack.Status(), ack)
+					if ack.IsOpen() {
+						port := strings.Split(ack.Port, "(")[0]
+						key := ack.Host + ack.Port
+						domain := ""
+						if _, present := hostnames[ack.Host]; !present {
+							println("Looking up CNAME")
+							t := time.Now()
+							cname, err := net.LookupCNAME(ack.Host)
+							if err == nil {
+								println("Got CNAME", cname)
+								domain = cname
+							}
+							println("Domain name: ", domain, "in", time.Since(t).Seconds(), "seconds")
+							hostnames[ack.Host] = domain
+						} else {
+							domain = hostnames[ack.Host]
+						}
+						if _, present := scan[key]; !present {
+							scan[key] = ack
+							println("About to scan", ack.Host, ack.Port)
+							channel := scanHost(tlsmodel.HostAndPort{
+								Hostname: ack.Host,
+								Port:     port,
+							}, config, domain)
+							resultChannels = append(resultChannels, channel)
+						}
 					}
-					println("Domain name: ", domain, "in", time.Since(t).Seconds(), "seconds")
-					hostnames[ack.Host] = domain
-				} else {
-					domain = hostnames[ack.Host]
 				}
-				if _, present := scan[key]; !present {
-					scan[key] = ack
-					println("About to scan", ack.Host, ack.Port)
-					channel := scanHost(tlsmodel.HostAndPort{
-						Hostname: ack.Host,
-						Port:     port,
-					}, config, domain)
-					resultChannels = append(resultChannels, channel)
+				println("out of portscan result loop")
+				for res := range MergeResultChannels(resultChannels...) {
+					fmt.Printf("Merged result %#v\n", res)
+					scanResults <- res
 				}
-			}
-		}
-		for res := range MergeResultChannels(resultChannels...) {
-			fmt.Printf("Merged result %#v\n", res)
-			scanResults <- res
+			}()
+			return out
+		}():
+			//NOOP
 		}
 	}()
 	return scanResults
