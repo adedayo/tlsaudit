@@ -258,12 +258,10 @@ func runTLSScan(ipSource func() []string, ipToHostnameResolver func(string) stri
 		fmt.Printf("Scanning Host %s (%d of %d)\n", host, counter, count)
 		results = append(results, ScanCIDRTLS(host, psr.Request.Config))
 		for result := range MergeResultChannels(results...) {
-			fmt.Printf("Got Merged Channel Result %#v\n", result)
 			key := result.Server + result.Port
 			if _, present := scan[key]; !present {
 				scan[key] = result
 				scanResults = append(scanResults, result)
-				// writeScanResult(key, &result, config)
 				println("Got result for ", result.Server, ipToHostnameResolver(result.Server), result.Port, result.SupportsTLS(), result.IsSTARTLS, fmt.Sprintf("%#v", result.SupportedProtocols))
 			}
 		}
@@ -279,7 +277,6 @@ func runTLSScan(ipSource func() []string, ipToHostnameResolver func(string) stri
 		PersistScanRequest(psr)
 	}
 
-	// if err := persistTempScans(); err == nil {
 	//cleanup
 	if err := os.Remove(runFlag); err != nil {
 		log.Error(err)
@@ -294,12 +291,6 @@ func runTLSScan(ipSource func() []string, ipToHostnameResolver func(string) stri
 		log.Error(err)
 	}
 }
-
-//LoadTLSAuditConfig loads TLSAudit configuration
-//TLSAuditConfigPath is the default config path of the s
-// func LoadTLSAuditConfig() (config tlsmodel.TLSAuditConfig) {
-// 	return loadTLSConfig(TLSAuditConfigPath)
-// }
 
 func loadTLSConfig(path string) (config tlsmodel.TLSAuditConfig, e error) {
 	configFile, err := ioutil.ReadFile(path)
