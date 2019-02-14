@@ -27,7 +27,7 @@ var (
 	//TLSAuditConfigPath is the default config path of the TLSAudit service
 	TLSAuditConfigPath     = filepath.Join("data", "config", "TLSAuditConfig.yml")
 	latestTLSAuditSnapshot = make(map[time.Time]tlsmodel.TLSAuditSnapshotHuman)
-	tempTable              = []byte("tempTable")
+	// tempTable              = []byte("tempTable")
 	//control files
 	runFlag     = filepath.Join("data", "tlsaudit", "runlock.txt")
 	runFlag2    = filepath.Join("data", "tlsaudit", "deletethistoresume.txt")
@@ -39,12 +39,10 @@ var (
 
 //Service main service entry function
 func Service(configPath string) {
-	// suspend := make(chan bool)
 	println("Running TLSAudit Service ...")
 	TLSAuditConfigPath = configPath
 	ScheduleTLSAudit(getIPsFromConfig, ipResolver)
 	runtime.Goexit()
-	// <-suspend
 }
 
 func resolveIPs(ips []string) {
@@ -80,19 +78,61 @@ func getIPsFromConfig() []string {
 }
 
 func getIPsToScan(config tlsmodel.TLSAuditConfig) []string {
-	data := make(map[string]bool)
+	data := make(map[string]string)
 	ips := []string{}
 	for _, c := range config.CIDRRanges {
-		println(c)
+		ports := ""
+		if strings.Contains(c, ":") {
+			cc, p, err := extractPorts(c)
+			if err != nil {
+				continue
+			}
+			c = cc
+			ports = p
+		}
 		for _, ip := range cidr.Expand(c) {
-			println(ip)
-			if _, present := data[ip]; !present {
-				data[ip] = true
-				ips = append(ips, ip)
+			ip = fmt.Sprintf("%s/32", ip)
+			if ps, present := data[ip]; present {
+				if ps == "" {
+					data[ip] = ports
+				} else if ports != "" {
+					data[ip] = fmt.Sprintf("%s,%s", ps, ports)
+				}
+			} else {
+				data[ip] = ports
 			}
 		}
 	}
+	for ip, ports := range data {
+		x := ip
+
+		if ports != "" {
+			z := strings.Split(ip, "/")
+			if len(z) != 2 {
+				continue
+			}
+			x = fmt.Sprintf("%s:%s/%s", z[0], ports, z[1])
+			println(x)
+		}
+		ips = append(ips, x)
+	}
 	return ips
+}
+
+func extractPorts(cidrX string) (string, string, error) {
+	cs := strings.Split(cidrX, ":")
+	if len(cs) != 2 {
+		return cidrX, "", fmt.Errorf("Bad CIDR with port format %s", cidrX)
+	}
+	ip := cs[0]
+	if !strings.Contains(cs[1], "/") {
+		return ip + "/32", cs[1], nil
+	}
+	rng := strings.Split(cs[1], "/")
+	if len(rng) != 2 {
+		return cidrX, "", fmt.Errorf("Bad CIDR with port format %s", cidrX)
+	}
+	return fmt.Sprintf("%s/%s", ip, rng[1]), rng[0], nil
 }
 
 //ScheduleTLSAudit runs TLSAudit scan
@@ -119,6 +159,9 @@ func ScheduleTLSAudit(ipSource func() []string, resolver func(string) string) {
 				scheduler.Every(2).Hours().Run(scanJob)
 			}
 		}
+	}
+	if _, err := os.Stat(workList); !os.IsNotExist(err) {
+		runTLSScan(ipSource, resolver)
 	}
 }
 

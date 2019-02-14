@@ -79,8 +79,6 @@ var jsonOut, protocolsOnly, hideCerts, quiet, cipherMetrics bool
 var timeout, rate int
 
 func init() {
-	// cobra.OnInitialize(initConfig)
-
 	rootCmd.Flags().BoolVarP(&jsonOut, "json", "j", false, "generate JSON output")
 	rootCmd.Flags().BoolVarP(&protocolsOnly, "protocols-only", "p", false, "only check supported protocols - will not do detailed checks on supported ciphers (default: false)")
 	rootCmd.Flags().BoolVarP(&hideCerts, "hide-certs", "c", false, "suppress certificate information in output (default: false)")
@@ -96,32 +94,6 @@ func init() {
 	rootCmd.Flags().BoolVarP(&cipherMetrics, "show-cipher-metrics", "m", false, "enumerate all ciphers and show associated security and performance metrics (default: false)")
 
 }
-
-// // initConfig reads in config file and ENV variables if set.
-// func initConfig() {
-// 	if cfgFile != "" {
-// 		// Use config file from the flag.
-// 		viper.SetConfigFile(cfgFile)
-// 	} else {
-// 		// Find home directory.
-// 		home, err := homedir.Dir()
-// 		if err != nil {
-// 			fmt.Println(err)
-// 			os.Exit(1)
-// 		}
-
-// 		// Search config in home directory with name ".tlsaudit" (without extension).
-// 		viper.AddConfigPath(home)
-// 		viper.SetConfigName(".tlsaudit")
-// 	}
-
-// 	viper.AutomaticEnv() // read in environment variables that match
-
-// 	// If a config file is found, read it in.
-// 	if err := viper.ReadInConfig(); err == nil {
-// 		fmt.Println("Using config file:", viper.ConfigFileUsed())
-// 	}
-// }
 
 func runner(cmd *cobra.Command, args []string) error {
 

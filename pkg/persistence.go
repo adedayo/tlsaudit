@@ -258,37 +258,6 @@ func getScanSummary(dateDir, scanID string) tlsmodel.ScanResultSummary {
 	return summary
 }
 
-// func orderGrade(grade string) int {
-// 	switch grade {
-// 	case "A+":
-// 		return 20
-// 	case "A":
-// 		return 18
-// 	case "B":
-// 		return 16
-// 	case "C":
-// 		return 14
-// 	case "D":
-// 		return 12
-// 	case "E":
-// 		return 10
-// 	case "F":
-// 		return 8
-// 	case "T":
-// 		return 6
-// 	case "U":
-// 		return 4
-// 	case "Worst": // used to indicate worst case before data
-// 		return 100
-// 	case "Best": //used to indicate best case before data
-// 		return -100
-// 	case "":
-// 		return -10
-// 	default:
-// 		return -1
-// 	}
-// }
-
 //LoadScanRequest retrieves persisted scan request from folder following a layout pattern
 func LoadScanRequest(dir, scanID string) (psr tlsmodel.PersistedScanRequest, e error) {
 	lock.Lock()
@@ -343,7 +312,7 @@ func marshallScanResults(s []tlsmodel.ScanResult) []byte {
 	return result.Bytes()
 }
 
-//PersistScanRequest persists scan requesr
+//PersistScanRequest persists scan request
 func PersistScanRequest(psr tlsmodel.PersistedScanRequest) {
 	opts := badger.DefaultOptions
 	dbDir := filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID, "request")
