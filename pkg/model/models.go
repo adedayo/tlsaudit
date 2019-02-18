@@ -679,7 +679,8 @@ type ScanConfig struct {
 	//Suppress certificate output
 	HideCerts bool
 	//control whether to produce a running commentary of scan progress or stay quiet till the end
-	Quiet bool
+	Quiet       bool
+	ServicePort int
 }
 
 //SecurityScore contains the overall grading of a TLS/SSL port
@@ -1431,8 +1432,7 @@ func scoreCipher(cipher, protocol uint16, scan ScanResult) (score string) {
 //TLSAuditConfig is the configuration of the nmap runner
 type TLSAuditConfig struct {
 	DailySchedules   []string `yaml:"dailySchedules"` // in the format 13:45, 01:20 etc
-	DB               string   `yaml:"db"`
-	Table            string   `yaml:"hostTable"`
+	ServicePort      int      `yaml:"servicePort"`
 	IsProduction     bool     `yaml:"isProduction"`
 	PacketsPerSecond int      `yaml:"packetsPerSecond"`
 	Timeout          int      `yaml:"timeout"`

@@ -76,7 +76,7 @@ func Execute(version string) {
 
 var output, input, service string
 var jsonOut, protocolsOnly, hideCerts, quiet, cipherMetrics bool
-var timeout, rate int
+var timeout, rate, port int
 
 func init() {
 	rootCmd.Flags().BoolVarP(&jsonOut, "json", "j", false, "generate JSON output")

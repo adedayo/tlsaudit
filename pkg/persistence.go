@@ -17,13 +17,14 @@ import (
 )
 
 var (
-	dayFormat           = "2006-01-02"
-	baseScanDBDirectory = filepath.FromSlash("data/tlsaudit/scan")
-	scanSummaryCache    = make(map[string]tlsmodel.ScanResultSummary)
-	scanCache           = make(map[string][]tlsmodel.HumanScanResult)
-	psrCache            = make(map[string]tlsmodel.PersistedScanRequest)
-	lock                = sync.RWMutex{}
-	scanCacheLock       = sync.RWMutex{}
+	dayFormat              = "2006-01-02"
+	baseScanDBDirectory    = filepath.FromSlash("data/tlsaudit/scan")
+	scanSummaryCache       = make(map[string]tlsmodel.ScanResultSummary)
+	scanCache              = make(map[string][]tlsmodel.HumanScanResult)
+	psrCache               = make(map[string]tlsmodel.PersistedScanRequest)
+	latestTLSAuditSnapshot = make(map[time.Time]tlsmodel.TLSAuditSnapshotHuman)
+	lock                   = sync.RWMutex{}
+	scanCacheLock          = sync.RWMutex{}
 )
 
 //GetScanData returns the scan results of a given scan
@@ -79,6 +80,15 @@ func ListScans(rewindDays int, completed bool) (result []tlsmodel.ScanRequest) {
 				result = append(result, psr.Request)
 			}
 		}
+	}
+	return
+}
+
+func getLatestTLSAuditScan() (snapshot tlsmodel.TLSAuditSnapshotHuman) {
+
+	
+	for _, req := range ListScans(365, true) {
+		fmt.Printf("%#v\n", req.Config)
 	}
 	return
 }

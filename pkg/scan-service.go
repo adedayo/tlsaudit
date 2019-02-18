@@ -2,13 +2,14 @@ package tlsaudit
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,17 +17,18 @@ import (
 	"time"
 
 	"github.com/adedayo/cidr"
-	tlsmodel "github.com/adedayo/tlsaudit/pkg/model"
 
+	tlsmodel "github.com/adedayo/tlsaudit/pkg/model"
 	"github.com/carlescere/scheduler"
+	"github.com/gorilla/handlers"
+	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
 	yaml "gopkg.in/yaml.v2"
 )
 
 var (
 	//TLSAuditConfigPath is the default config path of the TLSAudit service
-	TLSAuditConfigPath     = filepath.Join("data", "config", "TLSAuditConfig.yml")
-	latestTLSAuditSnapshot = make(map[time.Time]tlsmodel.TLSAuditSnapshotHuman)
+	TLSAuditConfigPath = filepath.Join("data", "config", "TLSAuditConfig.yml")
 	// tempTable              = []byte("tempTable")
 	//control files
 	runFlag     = filepath.Join("data", "tlsaudit", "runlock.txt")
@@ -35,14 +37,88 @@ var (
 	progress    = filepath.Join("data", "tlsaudit", "progress.txt")
 	resolvedIPs = make(map[string]string)
 	ipLock      = sync.RWMutex{}
+	routes      = mux.NewRouter()
 )
+
+func init() {
+	r := routes
+	r.HandleFunc("/scan", RealtimeScan).Methods("GET")
+	r.HandleFunc("/listtlsscan/{rewind}/{completed}", getTLSAuditScanRequests).Methods("GET")
+	r.HandleFunc("/getscandata/{date}/{scanID}", getTLSAuditScanData).Methods("GET")
+	r.HandleFunc("/getprotocols/{date}/{scanID}", getTLSProtocols).Methods("GET")
+	r.HandleFunc("/getscansummaries/{rewind}", getTLSScanSummaries).Methods("GET")
+	// r.HandleFunc("/tlsaudit", getTLSAuditHandler).Methods("GET")
+}
 
 //Service main service entry function
 func Service(configPath string) {
 	println("Running TLSAudit Service ...")
 	TLSAuditConfigPath = configPath
 	ScheduleTLSAudit(getIPsFromConfig, ipResolver)
-	runtime.Goexit()
+	// runtime.Goexit()
+	if config, err := loadTLSConfig(configPath); err == nil {
+		log.Error(http.ListenAndServe(fmt.Sprintf(":%d", config.ServicePort), handlers.CORS()(routes)))
+	}
+}
+
+// func getTLSAuditHandler(w http.ResponseWriter, req *http.Request) {
+// 	json.NewEncoder(w).Encode(getLatestTLSAuditScan())
+// }
+
+func getTLSAuditScanRequests(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	rewind := 365
+	if rew, err := strconv.Atoi(vars["rewind"]); err == nil {
+		rewind = rew
+	}
+	completed := false
+	if comp, err := strconv.ParseBool(vars["completed"]); err == nil {
+		completed = comp
+	}
+
+	json.NewEncoder(w).Encode(ListScans(rewind, completed))
+}
+
+func getTLSAuditScanData(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	date := vars["date"]
+	scanID := vars["scanID"]
+	json.NewEncoder(w).Encode(GetScanData(date, scanID))
+}
+
+func getTLSProtocols(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	date := vars["date"]
+	scanID := vars["scanID"]
+	type data struct {
+		Hostname  string
+		Protocols []string
+		IP        string
+		STARTTLS  bool
+		Score     tlsmodel.SecurityScore
+	}
+	result := []data{}
+	for _, d := range GetScanData(date, scanID) {
+		if d.SupportsTLS {
+			result = append(result, data{
+				Hostname:  d.HostName,
+				Protocols: d.SupportedProtocols,
+				IP:        d.Server,
+				STARTTLS:  d.IsSTARTLS,
+				Score:     d.Score,
+			})
+		}
+	}
+	json.NewEncoder(w).Encode(result)
+}
+
+func getTLSScanSummaries(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	rewind := 365
+	if rew, err := strconv.Atoi(vars["rewind"]); err == nil {
+		rewind = rew
+	}
+	json.NewEncoder(w).Encode(GetScanSummaries(rewind))
 }
 
 func resolveIPs(ips []string) {
