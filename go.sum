@@ -42,6 +42,8 @@ github.com/adedayo/tcpscan v0.4.5 h1:f/7QMBq5sE0vGud7zMPiHXV3apzb1XzBBvPq7rYHQYg
 github.com/adedayo/tcpscan v0.4.5/go.mod h1:F/pKCVnHCaXBgMj0ATKo9FiwHsS8e7BKtFqC/KLiWQQ=
 github.com/adedayo/tcpscan v0.4.7 h1:cose4S/A/1rBpR5ydPMArcCNzkWvVHBQCAF1AiT/39E=
 github.com/adedayo/tcpscan v0.4.7/go.mod h1:F/pKCVnHCaXBgMj0ATKo9FiwHsS8e7BKtFqC/KLiWQQ=
+github.com/adedayo/tcpscan v0.5.0 h1:2/leLKLR4ygt3W0N77Hug72qrXOug/GXUe15jQw9n5s=
+github.com/adedayo/tcpscan v0.5.0/go.mod h1:6v2onzEsetkP35RqQnKhB5B5MLVV1w+eepgCkXWQzwc=
 github.com/adedayo/tlsaudit v0.2.2/go.mod h1:qlilsuzRz/YHkPXQvhnKxLr0ROWQTEvLEihXq7nHAdk=
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5doyWs3UAsr3K4I6qtAmlQcZDesFNEHPZAzj8=
 github.com/carlescere/scheduler v0.0.0-20170109141437-ee74d2f83d82 h1:9bAydALqAjBfPHd/eAiJBHnMZUYov8m2PkXVr+YGQeI=

@@ -476,6 +476,7 @@ func process(res ServerHelloAndCert, result *tlsmodel.ScanResult) {
 		result.OcspStaplingByProtocol[msg.Vers] = msg.OcspStapling
 		result.SecureRenegotiationSupportedByProtocol[msg.Vers] = msg.SecureRenegotiationSupported
 		result.SelectedCipherByProtocol[msg.Vers] = c
+		result.CipherSuiteByProtocol[msg.Vers] = append(result.CipherSuiteByProtocol[msg.Vers], c)
 		result.IsSTARTLS = res.StartTLS
 		result.ALPNByProtocol[msg.Vers] = msg.AlpnProtocol
 		result.CertificatesPerProtocol[msg.Vers] = res.Cert

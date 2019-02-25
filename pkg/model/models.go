@@ -1124,19 +1124,20 @@ func (s *ScanResult) CalculateScore() (result SecurityScore) {
 		cipherKeyExchangeScore := 1000
 		cipherStrengthMinScore := 1000
 		cipherStrengthMaxScore := 0
-		for _, p := range s.SupportedProtocols {
-			c := s.SelectedCipherByProtocol[p]
-			selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
-			if s.HasCipherPreferenceOrderByProtocol[p] {
-				for _, c := range s.CipherPreferenceOrderByProtocol[p] {
-					selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
-				}
-			} else {
-				for _, c := range s.CipherSuiteByProtocol[p] {
-					selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
-				}
+		// for _, p := range s.SupportedProtocols {
+		p := s.SupportedProtocols[0] // use the strongest protocol
+		c := s.SelectedCipherByProtocol[p]
+		selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
+		if s.HasCipherPreferenceOrderByProtocol[p] {
+			for _, c := range s.CipherPreferenceOrderByProtocol[p] {
+				selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
+			}
+		} else {
+			for _, c := range s.CipherSuiteByProtocol[p] {
+				selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
 			}
 		}
+		// }
 
 		result.KeyExchangeScore = cipherKeyExchangeScore
 
