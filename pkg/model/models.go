@@ -1395,6 +1395,9 @@ func mapEncKeyLengthToScore(kl int) (score int) {
 		score = 100
 	case kl >= 128:
 		score = 80
+	case kl >= 112: // It seems SSLLabs does this based on some scans that have a high key length of
+		// 256 and a low key lenght of 112. The score was 90 = (100+80)/2 instead of the expected 60
+		score = 70
 	case kl > 0:
 		score = 20
 	default:
