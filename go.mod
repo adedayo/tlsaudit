@@ -5,6 +5,7 @@ require (
 	github.com/adedayo/tcpscan v0.5.0
 	github.com/carlescere/scheduler v0.0.0-20170109141437-ee74d2f83d82
 	github.com/dgraph-io/badger v1.5.5-0.20181004181505-439fd464b155
+	github.com/golang/protobuf v1.3.0 // indirect
 	github.com/gorilla/handlers v1.4.0
 	github.com/gorilla/mux v1.7.0
 	github.com/gorilla/websocket v1.4.0

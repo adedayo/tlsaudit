@@ -1158,23 +1158,29 @@ func scoreCertificate(score *SecurityScore, scan *ScanResult) {
 	for _, c := range scan.CertificatesPerProtocol {
 		certs, err := c.GetCertificates()
 		if err != nil || len(certs) == 0 {
-			println("Certificate Error: ", err.Error())
+			// println("Certificate Error: ", err.Error())
 			cap(score, "T", "Error in obtaining certificates. Untrusted")
 			return
 		}
 
+		intermediates := x509.NewCertPool()
+		for i, cert := range certs {
+			if i == 0 {
+				continue
+			}
+			intermediates.AddCert(cert)
+		}
 		_, err = certs[0].Verify(x509.VerifyOptions{
-			Roots: nil,
+			Roots:         nil,
+			Intermediates: intermediates,
 		})
-
 		if err != nil {
-			println("Certificate Error: ", err.Error(), certs[0].Subject.String())
+			// println("Certificate Error: ", err.Error(), certs[0].Subject.String())
 			cap(score, "T", "Fails common public CA verification. "+err.Error())
 			return
 		}
 	}
 	score.CertificateScore = 100
-	println("Final certificate score ", score.CertificateScore)
 }
 
 func scoreProtocol(protocol uint16) (score int) {
