@@ -41,16 +41,19 @@ var (
 )
 
 func init() {
-	r := routes
+	AddTLSAuditRoutes(routes)
+}
+
+//AddTLSAuditRoutes adds TLSAudit service's routes to an existing router setup
+func AddTLSAuditRoutes(r *mux.Router) {
 	r.HandleFunc("/scan", RealtimeScan).Methods("GET")
 	r.HandleFunc("/listtlsscan/{rewind}/{completed}", getTLSAuditScanRequests).Methods("GET")
 	r.HandleFunc("/getscandata/{date}/{scanID}", getTLSAuditScanData).Methods("GET")
 	r.HandleFunc("/getprotocols/{date}/{scanID}", getTLSProtocols).Methods("GET")
 	r.HandleFunc("/getscansummaries/{rewind}", getTLSScanSummaries).Methods("GET")
-	// r.HandleFunc("/tlsaudit", getTLSAuditHandler).Methods("GET")
 }
 
-//Service main service entry function
+//Service main service entry functionå
 func Service(configPath string) {
 	println("Running TLSAudit Service ...")
 	TLSAuditConfigPath = configPath
@@ -60,10 +63,6 @@ func Service(configPath string) {
 		log.Error(http.ListenAndServe(fmt.Sprintf(":%d", config.ServicePort), handlers.CORS()(routes)))
 	}
 }
-
-// func getTLSAuditHandler(w http.ResponseWriter, req *http.Request) {
-// 	json.NewEncoder(w).Encode(getLatestTLSAuditScan())
-// }
 
 func getTLSAuditScanRequests(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)

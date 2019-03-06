@@ -1,5 +1,7 @@
 github.com/AndreasBriese/bbloom v0.0.0-20180913140656-343706a395b7 h1:PqzgE6kAMi81xWQA2QIVxjWkFHptGgC547vchpUbtFo=
 github.com/AndreasBriese/bbloom v0.0.0-20180913140656-343706a395b7/go.mod h1:bOvUY6CB00SOBii9/FifXqc0awNKxLFCL/+pkDPuyl8=
+github.com/AndreasBriese/bbloom v0.0.0-20190306084904-1f41738fa265 h1:HqNrtvR0/0IZXn2Ojenz/7tmmw3AjRS320PbueEQwWM=
+github.com/AndreasBriese/bbloom v0.0.0-20190306084904-1f41738fa265/go.mod h1:bOvUY6CB00SOBii9/FifXqc0awNKxLFCL/+pkDPuyl8=
 github.com/adedayo/cidr v0.1.3 h1:SrjHm2g80gq+ajZR/npN3p0C+hJs1iulnpuSPCy2PlQ=
 github.com/adedayo/cidr v0.1.3/go.mod h1:By6g82fmUcv8/Z/6JcDs1D4wO4gc/Ookb842bVCV6Io=
 github.com/adedayo/tcpscan v0.0.0-20190208154814-950e5eb08282 h1:pNbm9a2h79YXG/iAGTuHPDM9Zra7LBLLD9jAhXvD8sI=
@@ -44,6 +46,8 @@ github.com/adedayo/tcpscan v0.4.7 h1:cose4S/A/1rBpR5ydPMArcCNzkWvVHBQCAF1AiT/39E
 github.com/adedayo/tcpscan v0.4.7/go.mod h1:F/pKCVnHCaXBgMj0ATKo9FiwHsS8e7BKtFqC/KLiWQQ=
 github.com/adedayo/tcpscan v0.5.0 h1:2/leLKLR4ygt3W0N77Hug72qrXOug/GXUe15jQw9n5s=
 github.com/adedayo/tcpscan v0.5.0/go.mod h1:6v2onzEsetkP35RqQnKhB5B5MLVV1w+eepgCkXWQzwc=
+github.com/adedayo/tcpscan v0.5.1 h1:fsn7WUbKbMSgneNk+kCJ5W4qfLavbAWqSu9MeDWQ9Kw=
+github.com/adedayo/tcpscan v0.5.1/go.mod h1:6v2onzEsetkP35RqQnKhB5B5MLVV1w+eepgCkXWQzwc=
 github.com/adedayo/tlsaudit v0.2.2/go.mod h1:qlilsuzRz/YHkPXQvhnKxLr0ROWQTEvLEihXq7nHAdk=
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5doyWs3UAsr3K4I6qtAmlQcZDesFNEHPZAzj8=
 github.com/carlescere/scheduler v0.0.0-20170109141437-ee74d2f83d82 h1:9bAydALqAjBfPHd/eAiJBHnMZUYov8m2PkXVr+YGQeI=
