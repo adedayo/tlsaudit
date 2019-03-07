@@ -1088,8 +1088,10 @@ func (s ScanResult) ToString(config ScanConfig) (result string) {
 		}
 	}
 	score := s.CalculateScore()
+	result += "\n======================================================================================"
 	result += fmt.Sprintf("\nOverall Grade for %s (%s) on Port %s: %s\n", s.Server, hostname, s.Port, score.Grade)
 	result += fmt.Sprintf("Protocol score: %d, Cipher key exchange score: %d, Cipher encryption score: %d\n", score.ProtocolScore, score.KeyExchangeScore, score.CipherEncryptionScore)
+	result += "======================================================================================\n"
 	return
 }
 
