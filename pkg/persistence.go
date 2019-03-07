@@ -86,7 +86,6 @@ func ListScans(rewindDays int, completed bool) (result []tlsmodel.ScanRequest) {
 
 func getLatestTLSAuditScan() (snapshot tlsmodel.TLSAuditSnapshotHuman) {
 
-	
 	for _, req := range ListScans(365, true) {
 		fmt.Printf("%#v\n", req.Config)
 	}
@@ -340,62 +339,62 @@ func PersistScanRequest(psr tlsmodel.PersistedScanRequest) {
 		return txn.Set([]byte(psr.Request.ScanID), psr.Marshall())
 	})
 
-	if psr.Progress%10 == 0 { //compact DB every 10 run
-		lsmx, vlogx := db.Size()
-		for db.RunValueLogGC(.8) == nil {
-			lsmy, vlogy := db.Size()
-			println("Compacted DB")
-			fmt.Printf("Before LSM: %d, VLOG: %d, After LSM: %d, VLOG: %d\n", lsmx, vlogx, lsmy, vlogy)
-			lsmx, vlogx = lsmy, vlogy
-		}
-	}
+	// if psr.Progress%10 == 0 { //compact DB every 10 run
+	// 	lsmx, vlogx := db.Size()
+	// 	for db.RunValueLogGC(.8) == nil {
+	// 		lsmy, vlogy := db.Size()
+	// 		println("Compacted DB")
+	// 		fmt.Printf("Before LSM: %d, VLOG: %d, After LSM: %d, VLOG: %d\n", lsmx, vlogx, lsmy, vlogy)
+	// 		lsmx, vlogx = lsmy, vlogy
+	// 	}
+	// }
 }
 
 //CompactDB reclaims space by pruning the database
-func CompactDB(dayPath, scanID string) {
+// func CompactDB(dayPath, scanID string) {
 
-	//compact the scan requests
-	opts := badger.DefaultOptions
-	dbDir := filepath.Join(baseScanDBDirectory, dayPath, scanID, "request")
-	opts.Dir = dbDir
-	opts.ValueDir = dbDir
-	opts.NumVersionsToKeep = 0
-	db, err := badger.Open(opts)
-	if err != nil {
-		println(err.Error())
-		log.Fatal(err)
-		return
-	}
-	lsmx, vlogx := db.Size()
-	for db.RunValueLogGC(.8) == nil {
-		lsmy, vlogy := db.Size()
-		println("Compacted DB", opts.Dir)
-		fmt.Printf("Before LSM: %d, VLOG: %d, After LSM: %d, VLOG: %d\n", lsmx, vlogx, lsmy, vlogy)
-		lsmx, vlogx = lsmy, vlogy
-	}
-	db.Close()
+// 	//compact the scan requests
+// 	opts := badger.DefaultOptions
+// 	dbDir := filepath.Join(baseScanDBDirectory, dayPath, scanID, "request")
+// 	opts.Dir = dbDir
+// 	opts.ValueDir = dbDir
+// 	opts.NumVersionsToKeep = 0
+// 	db, err := badger.Open(opts)
+// 	if err != nil {
+// 		println(err.Error())
+// 		log.Fatal(err)
+// 		return
+// 	}
+// 	lsmx, vlogx := db.Size()
+// 	for db.RunValueLogGC(.8) == nil {
+// 		lsmy, vlogy := db.Size()
+// 		println("Compacted DB", opts.Dir)
+// 		fmt.Printf("Before LSM: %d, VLOG: %d, After LSM: %d, VLOG: %d\n", lsmx, vlogx, lsmy, vlogy)
+// 		lsmx, vlogx = lsmy, vlogy
+// 	}
+// 	db.Close()
 
-	//compact the scan results
-	dbDir = filepath.Join(baseScanDBDirectory, dayPath, scanID)
-	opts.Dir = dbDir
-	opts.ValueDir = dbDir
-	db, err = badger.Open(opts)
-	if err != nil {
-		println(err.Error())
+// 	//compact the scan results
+// 	dbDir = filepath.Join(baseScanDBDirectory, dayPath, scanID)
+// 	opts.Dir = dbDir
+// 	opts.ValueDir = dbDir
+// 	db, err = badger.Open(opts)
+// 	if err != nil {
+// 		println(err.Error())
 
-		log.Fatal(err)
-		return
-	}
-	lsmx, vlogx = db.Size()
-	for db.RunValueLogGC(.8) == nil {
-		lsmy, vlogy := db.Size()
-		println("Compacted DB", opts.Dir)
-		fmt.Printf("Before LSM: %d, VLOG: %d, After LSM: %d, VLOG: %d\n", lsmx, vlogx, lsmy, vlogy)
-		lsmx, vlogx = lsmy, vlogy
-	}
-	db.Close()
+// 		log.Fatal(err)
+// 		return
+// 	}
+// 	lsmx, vlogx = db.Size()
+// 	for db.RunValueLogGC(.8) == nil {
+// 		lsmy, vlogy := db.Size()
+// 		println("Compacted DB", opts.Dir)
+// 		fmt.Printf("Before LSM: %d, VLOG: %d, After LSM: %d, VLOG: %d\n", lsmx, vlogx, lsmy, vlogy)
+// 		lsmx, vlogx = lsmy, vlogy
+// 	}
+// 	db.Close()
 
-}
+// }
 
 //GetNextScanID returns the next unique scan ID
 func GetNextScanID() string {
