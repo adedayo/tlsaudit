@@ -10,6 +10,7 @@ require (
 	github.com/gorilla/handlers v1.4.0
 	github.com/gorilla/mux v1.7.0
 	github.com/gorilla/websocket v1.4.0
+	github.com/mitchellh/go-homedir v1.1.0
 	github.com/sirupsen/logrus v1.3.0
 	github.com/spf13/cobra v0.0.3
 	golang.org/x/crypto v0.0.0-20190228161510-8dd112bcdc25

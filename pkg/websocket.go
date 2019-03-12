@@ -17,7 +17,7 @@ import (
 
 var (
 	allowedOrigins = []string{
-		"auditmate.local:12345",
+		"localhost:12345",
 	}
 
 	upgrader = websocket.Upgrader{

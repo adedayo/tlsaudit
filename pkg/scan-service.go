@@ -53,14 +53,35 @@ func AddTLSAuditRoutes(r *mux.Router) {
 	r.HandleFunc("/getscansummaries/{rewind}", getTLSScanSummaries).Methods("GET")
 }
 
-//Service main service entry functionå
+//Service main service entry function
 func Service(configPath string) {
 	println("Running TLSAudit Service ...")
 	TLSAuditConfigPath = configPath
 	ScheduleTLSAudit(getIPsFromConfig, ipResolver)
-	// runtime.Goexit()
 	if config, err := loadTLSConfig(configPath); err == nil {
-		log.Error(http.ListenAndServe(fmt.Sprintf(":%d", config.ServicePort), handlers.CORS()(routes)))
+		ServeAPI(config.ServicePort)
+	}
+}
+
+//ServeAPI provides an API endpoint for interacting with TLSAudit on the localhost
+func ServeAPI(port int) {
+	corsOptions := []handlers.CORSOption{
+		handlers.AllowedOrigins([]string{"http://localhost:4200",
+			fmt.Sprintf("http://localhost:%d", port)}),
+		handlers.AllowedMethods([]string{"GET", "HEAD", "POST"}),
+		handlers.AllowedHeaders([]string{"Content-Type", "Authorization", "Accept",
+			"Accept-Language", "Origin"}),
+		handlers.AllowCredentials(),
+	}
+	log.Error(http.ListenAndServe(fmt.Sprintf(":%d", port), handlers.CORS(corsOptions...)(routes)))
+
+	certFile, keyFile, err := genCerts()
+	if err == nil {
+		log.Error(http.ListenAndServeTLS(fmt.Sprintf(":%d", port), certFile, keyFile, handlers.CORS()(routes)))
+
+		// log.Error(http.ListenAndServe(fmt.Sprintf(":%d", port), handlers.CORS()(routes)))
+	} else {
+		log.Error(err)
 	}
 }
 

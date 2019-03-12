@@ -76,7 +76,7 @@ func Execute(version string) {
 
 var output, input, service string
 var jsonOut, protocolsOnly, hideCerts, quiet, cipherMetrics bool
-var timeout, rate, port int
+var timeout, rate, api int
 
 func init() {
 	rootCmd.Flags().BoolVarP(&jsonOut, "json", "j", false, "generate JSON output")
@@ -85,6 +85,7 @@ func init() {
 	rootCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "control whether to produce a running commentary of progress or stay quiet till the end (default: false)")
 	rootCmd.Flags().IntVarP(&timeout, "timeout", "t", 5, "TIMEOUT (in seconds) to adjust how much we are willing to wait for servers to come back with responses. Smaller timeout sacrifices accuracy for speed")
 	rootCmd.Flags().IntVarP(&rate, "rate", "r", 1000, "the rate (in packets per second) that we should use to scan for open ports")
+	rootCmd.Flags().IntVar(&api, "api", 12345, "run as an API service on the specified port")
 	rootCmd.Flags().StringVarP(&output, "output", "o", "tlsaudit.txt", `write results into an output FILE`)
 	rootCmd.Flag("output").NoOptDefVal = "tlsaudit.txt"
 	rootCmd.Flags().StringVarP(&input, "input", "i", "tlsaudit_input.txt", `read the CIDR range, IPs and domains to scan from an input FILE separated by commas, or newlines`)
@@ -92,7 +93,6 @@ func init() {
 	rootCmd.Flags().StringVarP(&service, "service", "s", tlsaudit.TLSAuditConfigPath, fmt.Sprintf("run %s as a service", app))
 	rootCmd.Flag("service").NoOptDefVal = tlsaudit.TLSAuditConfigPath
 	rootCmd.Flags().BoolVarP(&cipherMetrics, "show-cipher-metrics", "m", false, "enumerate all ciphers and show associated security and performance metrics (default: false)")
-
 }
 
 func runner(cmd *cobra.Command, args []string) error {
@@ -102,12 +102,17 @@ func runner(cmd *cobra.Command, args []string) error {
 		showCipherMetrics()
 		return nil
 	}
-	if len(args) == 0 && !cmd.Flag("service").Changed && !cmd.Flag("input").Changed {
+	if len(args) == 0 && !cmd.Flag("service").Changed && !cmd.Flag("api").Changed && !cmd.Flag("input").Changed {
 		return cmd.Usage()
 	}
 
-	if cmd.Flag("service").Changed { // run as a service
+	if cmd.Flag("service").Changed { // run as a scheduled service with API
 		tlsaudit.Service(service)
+		return nil
+	}
+
+	if cmd.Flag("api").Changed { // run as simple API service
+		tlsaudit.ServeAPI(api)
 		return nil
 	}
 
