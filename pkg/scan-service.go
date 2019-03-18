@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/adedayo/cidr"
+	"github.com/mitchellh/go-homedir"
 
 	tlsmodel "github.com/adedayo/tlsaudit/pkg/model"
 	"github.com/carlescere/scheduler"
@@ -31,16 +32,28 @@ var (
 	TLSAuditConfigPath = filepath.Join("data", "config", "TLSAuditConfig.yml")
 	// tempTable              = []byte("tempTable")
 	//control files
-	runFlag     = filepath.Join("data", "tlsaudit", "runlock.txt")
-	runFlag2    = filepath.Join("data", "tlsaudit", "deletethistoresume.txt")
-	workList    = filepath.Join("data", "tlsaudit", "worklist.txt")
-	progress    = filepath.Join("data", "tlsaudit", "progress.txt")
+	runFlag     = "runlock.txt"
+	runFlag2    = "deletethistoresume.txt"
+	workList    = "worklist.txt"
+	progress    = "progress.txt"
 	resolvedIPs = make(map[string]string)
 	ipLock      = sync.RWMutex{}
 	routes      = mux.NewRouter()
 )
 
 func init() {
+	if home, err := homedir.Expand("~/.tlsaudit"); err == nil {
+		home = filepath.Join(home, "data", "tlsaudit")
+		if _, err := os.Stat(home); os.IsNotExist(err) {
+			if err2 := os.MkdirAll(home, 0755); err2 != nil {
+				log.Errorln("Could not create the path ", home)
+			}
+		}
+		runFlag = filepath.Join(home, "runlock.txt")
+		runFlag2 = filepath.Join(home, "deletethistoresume.txt")
+		workList = filepath.Join(home, "worklist.txt")
+		progress = filepath.Join(home, "progress.txt")
+	}
 	AddTLSAuditRoutes(routes)
 }
 

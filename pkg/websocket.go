@@ -51,6 +51,7 @@ func RealtimeScan(w http.ResponseWriter, req *http.Request) {
 				if request.ScanID == "" { //start a fresh scan
 					request.ScanID = GetNextScanID()
 					for _, x := range request.CIDRs {
+						x = strings.ReplaceAll(x, ",", "")
 						rng := "/32"
 						ports := ""
 						if strings.Contains(x, "/") {
@@ -66,8 +67,7 @@ func RealtimeScan(w http.ResponseWriter, req *http.Request) {
 						hs := cidr.Expand(x)
 						if ports != "" {
 							for i, h := range hs {
-								hh := strings.Split(h, "/")
-								hs[i] = fmt.Sprintf("%s:%s/%s", hh[0], ports, hh[1])
+								hs[i] = fmt.Sprintf("%s:%s/32", h, ports)
 							}
 						}
 						hosts = append(hosts, hs...)

@@ -12,13 +12,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mitchellh/go-homedir"
+
 	tlsmodel "github.com/adedayo/tlsaudit/pkg/model"
 	"github.com/dgraph-io/badger"
 )
 
 var (
 	dayFormat              = "2006-01-02"
-	baseScanDBDirectory    = filepath.FromSlash("data/tlsaudit/scan")
+	baseDirectory          = ""
+	baseScanDBDirectory    = filepath.Join(baseDirectory, filepath.FromSlash("data/tlsaudit/scan"))
 	scanSummaryCache       = make(map[string]tlsmodel.ScanResultSummary)
 	scanCache              = make(map[string][]tlsmodel.HumanScanResult)
 	psrCache               = make(map[string]tlsmodel.PersistedScanRequest)
@@ -26,6 +29,18 @@ var (
 	lock                   = sync.RWMutex{}
 	scanCacheLock          = sync.RWMutex{}
 )
+
+func init() {
+	if dir, err := homedir.Expand("~/.tlsaudit"); err == nil {
+		baseDirectory = dir
+		baseScanDBDirectory = filepath.Join(baseDirectory, filepath.FromSlash("data/tlsaudit/scan"))
+		if _, err := os.Stat(baseScanDBDirectory); os.IsNotExist(err) {
+			if err2 := os.MkdirAll(baseScanDBDirectory, 0755); err2 != nil {
+				fmt.Printf("Could not create the path %s\n", baseScanDBDirectory)
+			}
+		}
+	}
+}
 
 //GetScanData returns the scan results of a given scan
 func GetScanData(date, scanID string) []tlsmodel.HumanScanResult {

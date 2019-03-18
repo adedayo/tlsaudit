@@ -729,9 +729,9 @@ func (SecurityScore) OrderGrade(grade string) int {
 	case "U":
 		return 6
 	case "Worst": // used to indicate worst case before data
-		return -200
-	case "Best": //used to indicate best case before data
 		return 200
+	case "Best": //used to indicate best case before data
+		return -200
 	case "":
 		return 200
 	default:

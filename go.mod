@@ -1,5 +1,7 @@
 module github.com/adedayo/tlsaudit
 
+go 1.12
+
 require (
 	github.com/AndreasBriese/bbloom v0.0.0-20190306092124-e2d15f34fcf9 // indirect
 	github.com/adedayo/cidr v0.1.3
@@ -11,8 +13,8 @@ require (
 	github.com/gorilla/mux v1.7.0
 	github.com/gorilla/websocket v1.4.0
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/sirupsen/logrus v1.3.0
+	github.com/sirupsen/logrus v1.4.0
 	github.com/spf13/cobra v0.0.3
-	golang.org/x/crypto v0.0.0-20190228161510-8dd112bcdc25
+	golang.org/x/crypto v0.0.0-20190313024323-a1f597ede03a
 	gopkg.in/yaml.v2 v2.2.2
 )
