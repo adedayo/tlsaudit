@@ -600,20 +600,43 @@ func GetCipherConfig(cipher uint16) (config CipherConfig, err error) {
 }
 
 //ScanRequest is a model to describe a given TLS Audit scan
-type ScanRequest struct {
-	CIDRs  []string
+// type ScanRequest struct {
+// 	CIDRs  []string
+// 	Config ScanConfig
+// 	//Next two fields will be automatically set once scan starts
+// 	Day    string //Date the scan was run in the format yyyy-mm-dd
+// 	ScanID string //Non-empty ScanID means this is a ScanRequest to resume an existing, possibly incomplete, scan
+// }
+
+//ScanGroup is a grouping of CIDR ranges to be scanned with descriptions, useful for reporting
+type ScanGroup struct {
+	Description string   `yaml:"description"` //Freeform text used in reporting
+	CIDRRanges  []string `yaml:"cidrRanges"`
+}
+
+//AdvancedScanRequest is a model to describe a given TLS Audit scan
+type AdvancedScanRequest struct {
 	Config ScanConfig
-	Day    string //Date the scan was run in the format yyyy-mm-dd
-	ScanID string //Non-empty ScanID means this is a ScanRequest to resume an existing, possibly incomplete, scan
+	//Next two fields will be automatically set once scan starts
+	Day        string //Date the scan was run in the format yyyy-mm-dd
+	ScanID     string //Non-empty ScanID means this is a ScanRequest to resume an existing, possibly incomplete, scan
+	ScanGroups []ScanGroup
+}
+
+//GroupedHost exploded hosts from an associated ScanGroup
+type GroupedHost struct {
+	ScanGroup ScanGroup
+	Hosts     []string
 }
 
 //PersistedScanRequest persisted version of ScanRequest
 type PersistedScanRequest struct {
-	Request   ScanRequest
-	Hosts     []string
-	ScanStart time.Time
-	ScanEnd   time.Time
-	Progress  int
+	Request      AdvancedScanRequest
+	GroupedHosts []GroupedHost
+	ScanStart    time.Time
+	ScanEnd      time.Time
+	Progress     int
+	HostCount    int
 }
 
 // //ServerResultSummary is a mini report of scan result
@@ -626,7 +649,7 @@ type PersistedScanRequest struct {
 
 //ScanResultSummary is the summary of a scan result session
 type ScanResultSummary struct {
-	Request          ScanRequest
+	Request          AdvancedScanRequest
 	ScanStart        time.Time
 	ScanEnd          time.Time
 	Progress         int
@@ -1443,12 +1466,12 @@ func scoreCipher(cipher, protocol uint16, scan ScanResult) (score string) {
 
 //TLSAuditConfig is the configuration of the nmap runner
 type TLSAuditConfig struct {
-	DailySchedules   []string `yaml:"dailySchedules"` // in the format 13:45, 01:20 etc
-	ServicePort      int      `yaml:"servicePort"`
-	IsProduction     bool     `yaml:"isProduction"`
-	PacketsPerSecond int      `yaml:"packetsPerSecond"`
-	Timeout          int      `yaml:"timeout"`
-	CIDRRanges       []string `yaml:"cidrRanges"`
+	DailySchedules   []string    `yaml:"dailySchedules"` // in the format 13:45, 01:20 etc
+	ServicePort      int         `yaml:"servicePort"`
+	IsProduction     bool        `yaml:"isProduction"`
+	PacketsPerSecond int         `yaml:"packetsPerSecond"`
+	Timeout          int         `yaml:"timeout"`
+	ScanGroups       []ScanGroup `yaml:"scanGroups"`
 }
 
 //TLSAuditSnapshot a snapshot representing the results of a given scan session

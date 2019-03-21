@@ -1,7 +1,6 @@
 package tlsaudit
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -59,7 +58,7 @@ func init() {
 
 //AddTLSAuditRoutes adds TLSAudit service's routes to an existing router setup
 func AddTLSAuditRoutes(r *mux.Router) {
-	r.HandleFunc("/scan", RealtimeScan).Methods("GET")
+	r.HandleFunc("/scan", RealtimeAdvancedScan).Methods("GET")
 	r.HandleFunc("/listtlsscan/{rewind}/{completed}", getTLSAuditScanRequests).Methods("GET")
 	r.HandleFunc("/getscandata/{date}/{scanID}", getTLSAuditScanData).Methods("GET")
 	r.HandleFunc("/getprotocols/{date}/{scanID}", getTLSProtocols).Methods("GET")
@@ -188,55 +187,62 @@ func ipResolver(ip string) string {
 	}
 	return ""
 }
-func getIPsFromConfig() []string {
+func getIPsFromConfig() []tlsmodel.GroupedHost {
 	config, err := loadTLSConfig(TLSAuditConfigPath)
 	if err != nil {
-		return []string{}
+		return []tlsmodel.GroupedHost{}
 	}
 	ips := getIPsToScan(config)
 	return ips
 }
 
-func getIPsToScan(config tlsmodel.TLSAuditConfig) []string {
-	data := make(map[string]string)
-	ips := []string{}
-	for _, c := range config.CIDRRanges {
-		ports := ""
-		if strings.Contains(c, ":") {
-			cc, p, err := extractPorts(c)
-			if err != nil {
-				continue
-			}
-			c = cc
-			ports = p
-		}
-		for _, ip := range cidr.Expand(c) {
-			ip = fmt.Sprintf("%s/32", ip)
-			if ps, present := data[ip]; present {
-				if ps == "" {
-					data[ip] = ports
-				} else if ports != "" {
-					data[ip] = fmt.Sprintf("%s,%s", ps, ports)
-				}
-			} else {
-				data[ip] = ports
-			}
-		}
-	}
-	for ip, ports := range data {
-		x := ip
+func getIPsToScan(config tlsmodel.TLSAuditConfig) []tlsmodel.GroupedHost {
 
-		if ports != "" {
-			z := strings.Split(ip, "/")
-			if len(z) != 2 {
-				continue
+	groupedHosts := []tlsmodel.GroupedHost{}
+	for _, sg := range config.ScanGroups {
+		data := make(map[string]string)
+		ips := []string{}
+		for _, c := range sg.CIDRRanges {
+			ports := ""
+			if strings.Contains(c, ":") {
+				cc, p, err := extractPorts(c)
+				if err != nil {
+					continue
+				}
+				c = cc
+				ports = p
 			}
-			x = fmt.Sprintf("%s:%s/%s", z[0], ports, z[1])
-			println(x)
+			for _, ip := range cidr.Expand(c) {
+				ip = fmt.Sprintf("%s/32", ip)
+				if ps, present := data[ip]; present {
+					if ps == "" {
+						data[ip] = ports
+					} else if ports != "" {
+						data[ip] = fmt.Sprintf("%s,%s", ps, ports)
+					}
+				} else {
+					data[ip] = ports
+				}
+			}
 		}
-		ips = append(ips, x)
+		for ip, ports := range data {
+			x := ip
+			if ports != "" {
+				z := strings.Split(ip, "/")
+				if len(z) != 2 {
+					continue
+				}
+				x = fmt.Sprintf("%s:%s/%s", z[0], ports, z[1])
+				println(x)
+			}
+			ips = append(ips, x)
+		}
+		groupedHosts = append(groupedHosts, tlsmodel.GroupedHost{
+			ScanGroup: sg,
+			Hosts:     ips,
+		})
 	}
-	return ips
+	return groupedHosts
 }
 
 func extractPorts(cidrX string) (string, string, error) {
@@ -256,7 +262,7 @@ func extractPorts(cidrX string) (string, string, error) {
 }
 
 //ScheduleTLSAudit runs TLSAudit scan
-func ScheduleTLSAudit(ipSource func() []string, resolver func(string) string) {
+func ScheduleTLSAudit(ipSource func() []tlsmodel.GroupedHost, resolver func(string) string) {
 
 	//a restart schould clear the lock file
 	if _, err := os.Stat(runFlag2); !os.IsNotExist(err) { // there is a runlock
@@ -286,7 +292,7 @@ func ScheduleTLSAudit(ipSource func() []string, resolver func(string) string) {
 }
 
 //RunTLSScan accepts generator of IP addresses to scan and a function to map the IPs to hostnames (if any) - function to allow the hostname resolution happen in parallel if necessary
-func runTLSScan(ipSource func() []string, ipToHostnameResolver func(string) string) {
+func runTLSScan(ipSource func() []tlsmodel.GroupedHost, ipToHostnameResolver func(string) string) {
 	//create a directory, if not exist, for tlsaudit to keep temporary file
 	path := filepath.Join("data", "tlsaudit", "scan")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -302,8 +308,6 @@ func runTLSScan(ipSource func() []string, ipToHostnameResolver func(string) stri
 	}
 	psr := tlsmodel.PersistedScanRequest{}
 
-	hosts := []string{}
-	// ipHostNameMapping := ipToHostnameResolver
 	if _, err := os.Stat(workList); !os.IsNotExist(err) { // there is a worklist (due to a previous crash!)
 		//load the list of IPs from there
 		println("Resuming due to a worklist")
@@ -314,10 +318,10 @@ func runTLSScan(ipSource func() []string, ipToHostnameResolver func(string) stri
 		}
 		defer file.Close()
 
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			hosts = append(hosts, scanner.Text())
-		}
+		// scanner := bufio.NewScanner(file)
+		// for scanner.Scan() {
+		// 	hosts = append(hosts, scanner.Text())
+		// }
 
 		day, err := ioutil.ReadFile(runFlag)
 		if err != nil {
@@ -343,20 +347,24 @@ func runTLSScan(ipSource func() []string, ipToHostnameResolver func(string) stri
 		}
 		fmt.Printf("Will be scanning with PSR %#v", psr)
 	} else { // starting a fresh scan
-		hosts = ipSource()
-		//shuffle hosts randomly
-		rand.Shuffle(len(hosts), func(i, j int) {
-			hosts[i], hosts[j] = hosts[j], hosts[i]
-		})
+		shuffledHosts := []string{}
+		for _, gh := range ipSource() {
+			//shuffle hosts randomly
+			rand.Shuffle(len(gh.Hosts), func(i, j int) {
+				gh.Hosts[i], gh.Hosts[j] = gh.Hosts[j], gh.Hosts[i]
+			})
+			psr.GroupedHosts = append(psr.GroupedHosts, gh)
+			shuffledHosts = append(shuffledHosts, gh.Hosts...)
+		}
 
-		//write shuffled hosts into worklist file
-		if err := ioutil.WriteFile(workList, []byte(strings.Join(hosts, "\n")+"\n"), 0644); err != nil {
+		//write shuffled hosts into worklist file - we no longer rely on this for scanning, kept for debugging
+		if err := ioutil.WriteFile(workList, []byte(strings.Join(shuffledHosts, "\n")+"\n"), 0644); err != nil {
 			log.Error(err)
 			return
 		}
 
 		//track progress in the progress file
-		if err := ioutil.WriteFile(progress, []byte(fmt.Sprintf("-1,%d", len(hosts))), 0644); err != nil {
+		if err := ioutil.WriteFile(progress, []byte(fmt.Sprintf("-1,%d", len(shuffledHosts))), 0644); err != nil {
 			log.Error(err)
 			return
 		}
@@ -372,8 +380,11 @@ func runTLSScan(ipSource func() []string, ipToHostnameResolver func(string) stri
 			log.Error(err)
 			return
 		}
-		psr.Hosts = hosts
-		request := tlsmodel.ScanRequest{}
+		psr.HostCount = len(shuffledHosts)
+		request := tlsmodel.AdvancedScanRequest{}
+		for _, gh := range psr.GroupedHosts {
+			request.ScanGroups = append(request.ScanGroups, gh.ScanGroup)
+		}
 		request.Day = today
 		request.ScanID = GetNextScanID()
 		config, _ := loadTLSConfig(TLSAuditConfigPath)
@@ -385,7 +396,11 @@ func runTLSScan(ipSource func() []string, ipToHostnameResolver func(string) stri
 		psr.Request = request
 	}
 
-	go resolveIPs(hosts)
+	//we've got the psr. Now use it as the basis of the scans
+	hosts := []string{} // hosts to scan
+	for _, gh := range psr.GroupedHosts {
+		hosts = append(hosts, gh.Hosts...)
+	}
 
 	//get ready to scan
 	//get where we "stopped" last time possibly after a crash
@@ -401,6 +416,11 @@ func runTLSScan(ipSource func() []string, ipToHostnameResolver func(string) stri
 		return
 	}
 	psr.Progress = stopped
+
+	//only resolve IPs for the hosts that have not been scanned
+	if stopped < len(hosts) {
+		go resolveIPs(hosts[stopped:])
+	}
 
 	PersistScanRequest(psr)
 

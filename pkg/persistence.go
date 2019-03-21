@@ -56,7 +56,7 @@ func GetScanData(date, scanID string) []tlsmodel.HumanScanResult {
 }
 
 //ListScans returns the ScanID list of  persisted scans
-func ListScans(rewindDays int, completed bool) (result []tlsmodel.ScanRequest) {
+func ListScans(rewindDays int, completed bool) (result []tlsmodel.AdvancedScanRequest) {
 	if rewindDays < 0 {
 		log.Print("The number of days in the past must be non-negative.")
 		return
@@ -91,7 +91,7 @@ func ListScans(rewindDays int, completed bool) (result []tlsmodel.ScanRequest) {
 		for _, sID := range dirs {
 			scanID := sID.Name()
 			//LoadScanRequest retrieves persisted scan request from folder following a layout pattern
-			if psr, err := LoadScanRequest(d, scanID); err == nil && (len(psr.Hosts) == psr.Progress) == completed {
+			if psr, err := LoadScanRequest(d, scanID); err == nil && (psr.HostCount == psr.Progress) == completed {
 				result = append(result, psr.Request)
 			}
 		}
@@ -140,7 +140,11 @@ func streamExistingResult(psr tlsmodel.PersistedScanRequest,
 	defer db.Close()
 
 	hostResults := make(map[string][]tlsmodel.ScanResult)
-	total := len(psr.Hosts)
+	total := 0
+	for _, gs := range psr.GroupedHosts {
+		total += len(gs.Hosts)
+	}
+
 	position := 0
 
 	db.View(func(txn *badger.Txn) error {
@@ -317,7 +321,7 @@ func LoadScanRequest(dir, scanID string) (psr tlsmodel.PersistedScanRequest, e e
 		return psr, outErr
 	}
 	psr, e = tlsmodel.UnmasharlPersistedScanRequest(data)
-	if e == nil && len(psr.Hosts) == psr.Progress {
+	if e == nil && psr.HostCount == psr.Progress {
 		lock.Lock()
 		psrCache[fmt.Sprintf("%s:%s", dir, scanID)] = psr
 		lock.Unlock()
