@@ -8,6 +8,7 @@ require (
 	github.com/adedayo/tcpscan v0.5.6
 	github.com/carlescere/scheduler v0.0.0-20170109141437-ee74d2f83d82
 	github.com/dgraph-io/badger v1.5.5-0.20181004181505-439fd464b155
+	github.com/dgryski/go-farm v0.0.0-20190323231341-8198c7b169ec // indirect
 	github.com/golang/protobuf v1.3.0 // indirect
 	github.com/gorilla/handlers v1.4.0
 	github.com/gorilla/mux v1.7.0

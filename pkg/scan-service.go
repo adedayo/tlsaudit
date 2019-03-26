@@ -141,17 +141,20 @@ func getTLSProtocols(w http.ResponseWriter, req *http.Request) {
 		Score     tlsmodel.SecurityScore
 	}
 	result := []data{}
-	for _, d := range GetScanData(date, scanID) {
-		if d.SupportsTLS {
-			result = append(result, data{
-				Hostname:  d.HostName,
-				Protocols: d.SupportedProtocols,
-				IP:        d.Server,
-				STARTTLS:  d.IsSTARTLS,
-				Score:     d.Score,
-			})
+	for _, ds := range GetScanData(date, scanID).Results {
+		for _, d := range ds {
+			if d.SupportsTLS {
+				result = append(result, data{
+					Hostname:  d.HostName,
+					Protocols: d.SupportedProtocols,
+					IP:        d.Server,
+					STARTTLS:  d.IsSTARTLS,
+					Score:     d.Score,
+				})
+			}
 		}
 	}
+
 	json.NewEncoder(w).Encode(result)
 }
 
@@ -386,7 +389,7 @@ func runTLSScan(ipSource func() []tlsmodel.GroupedHost, ipToHostnameResolver fun
 			request.ScanGroups = append(request.ScanGroups, gh.ScanGroup)
 		}
 		request.Day = today
-		request.ScanID = GetNextScanID()
+		request.ScanID = getNextScanID()
 		config, _ := loadTLSConfig(TLSAuditConfigPath)
 		scanConfig := tlsmodel.ScanConfig{
 			PacketsPerSecond: config.PacketsPerSecond,

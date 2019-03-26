@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/big"
 	"net"
 	"sort"
 	"strconv"
@@ -373,7 +374,18 @@ func (cc *CipherConfig) GetKeyExchangeKeyLength(cipher, protocol uint16, scan Sc
 				}
 			}
 		}
-	case strings.Contains(kx, "DH"): // see https://www.ietf.org/rfc/rfc5480.txt and pp 133 https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-56Ar3.pdf for comparable strength
+	case cc.Authentication == "RSA" && strings.HasPrefix(kx, "DH"):
+		if ex, ok := scan.KeyExchangeByProtocolByCipher[protocol]; ok {
+			if kex, ok2 := ex[cipher]; ok2 { // there is a key exchange data
+				if key := kex.Key; len(key) > 1 {
+					length := int(key[0])<<8 | int(key[1])
+					kxch := key[2 : 2+length]
+					Public := new(big.Int).SetBytes(kxch)
+					return Public.BitLen()
+				}
+			}
+		}
+	case strings.Contains(kx, "ECDH"): // see https://www.ietf.org/rfc/rfc5480.txt and pp 133 https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-56Ar3.pdf for comparable strength
 		if ex, ok := scan.KeyExchangeByProtocolByCipher[protocol]; ok {
 			if kex, ok := ex[cipher]; ok {
 				if key := kex.Key; len(key) > 2 {
@@ -599,14 +611,11 @@ func GetCipherConfig(cipher uint16) (config CipherConfig, err error) {
 	return config, fmt.Errorf("The cipher id 0x%x is not recognised", cipher)
 }
 
-//ScanRequest is a model to describe a given TLS Audit scan
-// type ScanRequest struct {
-// 	CIDRs  []string
-// 	Config ScanConfig
-// 	//Next two fields will be automatically set once scan starts
-// 	Day    string //Date the scan was run in the format yyyy-mm-dd
-// 	ScanID string //Non-empty ScanID means this is a ScanRequest to resume an existing, possibly incomplete, scan
-// }
+//ScanData is the Human-readable result of a given scan
+type ScanData struct {
+	ScanRequest AdvancedScanRequest
+	Results     map[int][]HumanScanResult //ScanGroup index (in the ASR) -> human scan results
+}
 
 //ScanGroup is a grouping of CIDR ranges to be scanned with descriptions, useful for reporting
 type ScanGroup struct {
@@ -840,6 +849,7 @@ type ScanResult struct {
 	IsSTARTLS                              bool
 	IsSSH                                  bool
 	SupportsTLSFallbackSCSV                bool
+	GroupID                                int //ScanRequest Host Group index
 }
 
 //UnmarsharlScanResult builds ScanResults from bytes
@@ -876,6 +886,7 @@ type HumanScanResult struct {
 	IsSSH                   bool
 	SupportsTLSFallbackSCSV bool
 	Score                   SecurityScore
+	GroupID                 int //ScanRequest Host Group index
 }
 
 //HumanCertificate is a "string" representation of various attributes of a certificate
@@ -913,6 +924,7 @@ func getCurve(protocol, cipher uint16, scan ScanResult) string {
 
 //ToStringStruct returns a string-decoded form of ScanResult
 func (s ScanResult) ToStringStruct() (out HumanScanResult) {
+	out.GroupID = s.GroupID
 	out.Server = s.Server
 	ip, err := net.LookupAddr(s.Server)
 	if err == nil {

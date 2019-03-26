@@ -23,7 +23,7 @@ var (
 	baseDirectory          = ""
 	baseScanDBDirectory    = filepath.Join(baseDirectory, filepath.FromSlash("data/tlsaudit/scan"))
 	scanSummaryCache       = make(map[string]tlsmodel.ScanResultSummary)
-	scanCache              = make(map[string][]tlsmodel.HumanScanResult)
+	scanCache              = make(map[string]tlsmodel.ScanData)
 	psrCache               = make(map[string]tlsmodel.PersistedScanRequest)
 	latestTLSAuditSnapshot = make(map[time.Time]tlsmodel.TLSAuditSnapshotHuman)
 	lock                   = sync.RWMutex{}
@@ -43,7 +43,7 @@ func init() {
 }
 
 //GetScanData returns the scan results of a given scan
-func GetScanData(date, scanID string) []tlsmodel.HumanScanResult {
+func GetScanData(date, scanID string) tlsmodel.ScanData {
 	scanCacheLock.Lock()
 	key := fmt.Sprintf("%s:%s", date, scanID)
 	if cache, ok := scanCache[key]; ok {
@@ -95,14 +95,6 @@ func ListScans(rewindDays int, completed bool) (result []tlsmodel.AdvancedScanRe
 				result = append(result, psr.Request)
 			}
 		}
-	}
-	return
-}
-
-func getLatestTLSAuditScan() (snapshot tlsmodel.TLSAuditSnapshotHuman) {
-
-	for _, req := range ListScans(365, true) {
-		fmt.Printf("%#v\n", req.Config)
 	}
 	return
 }
@@ -231,11 +223,21 @@ func getScanSummary(dateDir, scanID string) tlsmodel.ScanResultSummary {
 		summary.HostCount = total
 
 		for _, r := range results {
-			if cache, ok := scanCache[key]; ok {
-				cache = append(cache, r)
-				scanCache[key] = cache
+			if scanData, ok := scanCache[key]; ok {
+				gid := r.GroupID
+				if groupResults, present := scanData.Results[gid]; present {
+					groupResults = append(groupResults, r)
+					scanData.Results[gid] = groupResults
+				} else {
+					scanData.Results[gid] = []tlsmodel.HumanScanResult{r}
+				}
+				scanCache[key] = scanData
 			} else {
-				scanCache[key] = []tlsmodel.HumanScanResult{r}
+				data := make(map[int][]tlsmodel.HumanScanResult)
+				data[r.GroupID] = []tlsmodel.HumanScanResult{r}
+				scanCache[key] = tlsmodel.ScanData{
+					Results: data,
+				}
 			}
 			summary.PortCount++
 			grade := r.Score.Grade
@@ -277,6 +279,10 @@ func getScanSummary(dateDir, scanID string) tlsmodel.ScanResultSummary {
 		summary.ScanStart = psr.ScanStart
 		summary.ScanEnd = psr.ScanEnd
 		summary.Request = psr.Request
+		if cache, ok := scanCache[key]; ok {
+			cache.ScanRequest = psr.Request
+			scanCache[key] = cache
+		}
 	}
 	summary.GradeToHostPorts = gradeToPorts
 	lock.Lock()
@@ -415,8 +421,8 @@ func PersistScanRequest(psr tlsmodel.PersistedScanRequest) {
 
 // }
 
-//GetNextScanID returns the next unique scan ID
-func GetNextScanID() string {
+//getNextScanID returns the next unique scan ID
+func getNextScanID() string {
 	prefix := filepath.Join(baseScanDBDirectory, time.Now().Format(dayFormat))
 	if _, err := os.Stat(prefix); os.IsNotExist(err) {
 		if err2 := os.MkdirAll(prefix, 0755); err2 != nil {

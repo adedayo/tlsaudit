@@ -50,7 +50,7 @@ func RealtimeAdvancedScan(w http.ResponseWriter, req *http.Request) {
 				hostCount := 0
 				psr := tlsmodel.PersistedScanRequest{}
 				if request.ScanID == "" { //start a fresh scan
-					request.ScanID = GetNextScanID()
+					request.ScanID = getNextScanID()
 					for _, sg := range request.ScanGroups {
 						for _, x := range sg.CIDRRanges {
 							x = strings.ReplaceAll(x, ",", "")
@@ -117,8 +117,8 @@ func RealtimeAdvancedScan(w http.ResponseWriter, req *http.Request) {
 				streamExistingResult(psr, callback)
 
 				counter := 0
-				for _, gs := range psr.GroupedHosts {
-					for _, host := range gs.Hosts {
+				for ghi, ghs := range psr.GroupedHosts {
+					for _, host := range ghs.Hosts {
 						counter++
 						if counter < psr.Progress {
 							continue
@@ -129,6 +129,7 @@ func RealtimeAdvancedScan(w http.ResponseWriter, req *http.Request) {
 						results = append(results, ScanCIDRTLS(host, request.Config))
 						for result := range MergeResultChannels(results...) {
 							key := result.Server + result.Port
+							result.GroupID = ghi
 							if _, present := scan[key]; !present {
 								scan[key] = result
 								narrative := fmt.Sprintf("Partial scan of %s. Progress %f%% %d hosts of a total of %d in %f seconds\n",
