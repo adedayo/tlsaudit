@@ -96,6 +96,11 @@ func init() {
 }
 
 func runner(cmd *cobra.Command, args []string) error {
+	// if true {
+	// 	conf, _ := tlsmodel.GetCipherConfig(0xc019)
+	// 	fmt.Printf("%#v", conf)
+	// 	return nil
+	// }
 
 	if cmd.Flag("show-cipher-metrics").Changed {
 		println("Showing cipher metrics")

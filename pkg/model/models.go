@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rsa"
 	"crypto/tls"
+	cryptotls "crypto/tls"
 	"crypto/x509"
 	"encoding/gob"
 	"encoding/json"
@@ -356,6 +357,8 @@ func (cc *CipherConfig) GetKeyExchangeKeyLength(cipher, protocol uint16, scan Sc
 	switch {
 	case kx == "NULL":
 		kl = 0
+	case cc.Authentication == "anon":
+		kl = 0
 	case kx == "RSA" || (cc.Authentication == "RSA" && strings.Contains(kx, "DH") && func() bool {
 		//deal with DH ciphers that use RSA for key exchange
 		ex, ok := scan.KeyExchangeByProtocolByCipher[protocol]
@@ -390,6 +393,17 @@ func (cc *CipherConfig) GetKeyExchangeKeyLength(cipher, protocol uint16, scan Sc
 			if kex, ok := ex[cipher]; ok {
 				if key := kex.Key; len(key) > 2 {
 					cid := uint16(key[1])<<8 | uint16(key[2])
+					if k, ok := NamedCurveStrength[cid]; ok {
+						kl = k
+					}
+				}
+			}
+		}
+
+	case strings.Contains(kx, TLS13KeyExchange):
+		if ex, ok := scan.KeyExchangeByProtocolByCipher[protocol]; ok {
+			if kex, ok := ex[cipher]; ok {
+				if cid := uint16(kex.Group); cid != 0 {
 					if k, ok := NamedCurveStrength[cid]; ok {
 						kl = k
 					}
@@ -560,6 +574,38 @@ type CipherMetrics struct {
 	CipherConfig          CipherConfig
 }
 
+func isTLS13Cipher(cipher uint16) bool {
+	for _, x := range TLS13Ciphers {
+		if x == cipher {
+			return true
+		}
+	}
+	return false
+}
+
+func getCipherConfig13(cipher uint16) (config CipherConfig, err error) {
+	if cipherName, exists := CipherSuiteMap[cipher]; exists {
+		config.CipherID = cipher
+		config.Cipher = cipherName
+		config.KeyExchange = TLS13KeyExchange
+		config.Authentication = TLS13KeyExchange
+		cipherName = strings.TrimPrefix(cipherName, "TLS_")
+		//set these values temporarily
+		config.MACPRF = TLS13KeyExchange
+		config.Encryption = cipherName
+		if strings.Contains(cipherName, "SHA256") {
+			config.MACPRF = "SHA256"
+			config.Encryption = strings.TrimSuffix(cipherName, "_SHA256")
+		} else if strings.Contains(cipherName, "SHA384") {
+			config.MACPRF = "SHA384"
+			config.Encryption = strings.TrimSuffix(cipherName, "_SHA384")
+		}
+
+		return
+	}
+	return config, fmt.Errorf("The cipher id 0x%x is not recognised", cipher)
+}
+
 //GetCipherConfig extracts a `CipherConfig` using the Cipher's IANA string name
 // Details here https://www.iana.org/assignments/tls-parameters/tls-parameters.txt
 func GetCipherConfig(cipher uint16) (config CipherConfig, err error) {
@@ -569,7 +615,11 @@ func GetCipherConfig(cipher uint16) (config CipherConfig, err error) {
 		if cipherName == "TLS_EMPTY_RENEGOTIATION_INFO_SCSV" || cipherName == "TLS_FALLBACK_SCSV" {
 			return
 		}
+		if isTLS13Cipher(cipher) {
+			return getCipherConfig13(cipher)
+		}
 		cipherName = strings.TrimPrefix(cipherName, "TLS_")
+
 		cs := strings.Split(cipherName, "_WITH_")
 		if len(cs) != 2 {
 			return config, fmt.Errorf("Expects a cipher name that contains _WITH_ but got %s", config.Cipher)
@@ -796,12 +846,36 @@ type ServerHelloMessage struct {
 	SecureRenegotiation          []byte
 	SecureRenegotiationSupported bool
 	AlpnProtocol                 string
+	SupportedVersion             uint16
+	ServerShare                  KeyShare
+	SelectedIdentityPresent      bool
+	SelectedIdentity             uint16
+
+	// HelloRetryRequest extensions
+	cookie        []byte
+	selectedGroup CurveID
+
+	RawHello interface{}
+}
+
+// CurveID is the type of a TLS identifier for an elliptic curve. See
+// https://www.iana.org/assignments/tls-parameters/tls-parameters.xml#tls-parameters-8.
+//
+// In TLS 1.3, this type is called NamedGroup, but at this time this library
+// only supports Elliptic Curve based groups. See RFC 8446, Section 4.2.7.
+type CurveID uint16
+
+//KeyShare TLS 1.3 Key Share. See RFC 8446, Section 4.2.8.
+type KeyShare struct {
+	Group CurveID
+	Data  []byte
 }
 
 // ServerKeyExchangeMsg is the key exchange message
 type ServerKeyExchangeMsg struct {
-	Raw []byte
-	Key []byte
+	// Raw []byte
+	Key   []byte
+	Group CurveID // for TLS v1.3
 }
 
 // HelloAndKey bundles server hello and ServerKeyExchange messages
@@ -813,19 +887,24 @@ type HelloAndKey struct {
 
 // CertificateMessage simply exporting the internal certificateMsg
 type CertificateMessage struct {
-	Raw          []byte
+	// Raw          []byte
 	Certificates [][]byte
+	Certs        []*x509.Certificate
 }
 
 //GetCertificates returns the list of certificates in a TLS certificate message
-func (cert CertificateMessage) GetCertificates() (certs []*x509.Certificate, e error) {
-
-	for _, c := range cert.Certificates {
-		cc, err := x509.ParseCertificate(c)
-		if err != nil {
-			return certs, err
+func (cert *CertificateMessage) GetCertificates() (certs []*x509.Certificate, e error) {
+	if cert.Certs == nil {
+		for _, c := range cert.Certificates {
+			cc, err := x509.ParseCertificate(c)
+			if err != nil {
+				return certs, err
+			}
+			certs = append(certs, cc)
 		}
-		certs = append(certs, cc)
+		cert.Certs = certs
+	} else {
+		certs = cert.Certs
 	}
 	return
 
@@ -911,11 +990,15 @@ func getCurve(protocol, cipher uint16, scan ScanResult) string {
 	curveID := ""
 	if c, ok := scan.KeyExchangeByProtocolByCipher[protocol]; ok {
 		if ex, ok := c[cipher]; ok {
-			key := ex.Key
-			if len(key) > 4 && key[0] == 3 {
-				//named curve
-				cid := uint16(key[1])<<8 | uint16(key[2])
+			if cid := uint16(ex.Group); cid != 0 { // we would have set the CurveID group in TLS v1.3 and above
 				curveID = fmt.Sprintf(" (Named Curve: %s)", NamedCurves[cid])
+			} else {
+				key := ex.Key
+				if len(key) > 4 && key[0] == 3 {
+					//named curve
+					cid := uint16(key[1])<<8 | uint16(key[2])
+					curveID = fmt.Sprintf(" (Named Curve: %s)", NamedCurves[cid])
+				}
 			}
 		}
 	}
@@ -1074,7 +1157,11 @@ func (s ScanResult) ToString(config ScanConfig) (result string) {
 				startTLS = " (STARTTLS)"
 			}
 			result += fmt.Sprintf("\t%s%s:\n", TLSVersionMap[tls], startTLS)
-			result += fmt.Sprintf("\t\tSupports secure renegotiation: %t\n", s.SecureRenegotiationSupportedByProtocol[tls])
+			tls13RenegotiationSupport := ""
+			if tls == cryptotls.VersionTLS13 {
+				tls13RenegotiationSupport = " (not applicable to TLS v1.3)" // see https://tools.ietf.org/html/rfc8446#section-4.1.2
+			}
+			result += fmt.Sprintf("\t\tSupports secure renegotiation: %t%s\n", s.SecureRenegotiationSupportedByProtocol[tls], tls13RenegotiationSupport)
 			result += fmt.Sprintf("\t\tApplication Layer Protocol Negotiation: %s\n", s.ALPNByProtocol[tls])
 			if !config.ProtocolsOnly {
 
@@ -1126,6 +1213,12 @@ func (s ScanResult) ToString(config ScanConfig) (result string) {
 	result += "\n======================================================================================"
 	result += fmt.Sprintf("\nOverall Grade for %s (%s) on Port %s: %s\n", s.Server, hostname, s.Port, score.Grade)
 	result += fmt.Sprintf("Protocol score: %d, Cipher key exchange score: %d, Cipher encryption score: %d\n", score.ProtocolScore, score.KeyExchangeScore, score.CipherEncryptionScore)
+	if len(score.Warnings) > 0 {
+		result += "Warnings:\n"
+		for _, w := range score.Warnings {
+			result += fmt.Sprintf("\t%s\n", w)
+		}
+	}
 	result += "======================================================================================\n"
 	return
 }
@@ -1165,14 +1258,14 @@ func (s *ScanResult) CalculateScore() (result SecurityScore) {
 		p := s.SupportedProtocols[0] // use the strongest protocol
 		c := s.SelectedCipherByProtocol[p]
 		selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
+		var cipherSuite []uint16
 		if s.HasCipherPreferenceOrderByProtocol[p] {
-			for _, c := range s.CipherPreferenceOrderByProtocol[p] {
-				selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
-			}
+			cipherSuite = s.CipherPreferenceOrderByProtocol[p]
 		} else {
-			for _, c := range s.CipherSuiteByProtocol[p] {
-				selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
-			}
+			cipherSuite = s.CipherSuiteByProtocol[p]
+		}
+		for _, c := range cipherSuite {
+			selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
 		}
 		// }
 
@@ -1195,7 +1288,6 @@ func scoreCertificate(score *SecurityScore, scan *ScanResult) {
 	for _, c := range scan.CertificatesPerProtocol {
 		certs, err := c.GetCertificates()
 		if err != nil || len(certs) == 0 {
-			// println("Certificate Error: ", err.Error())
 			cap(score, "T", "Error in obtaining certificates. Untrusted")
 			return
 		}
@@ -1212,7 +1304,6 @@ func scoreCertificate(score *SecurityScore, scan *ScanResult) {
 			Intermediates: intermediates,
 		})
 		if err != nil {
-			// println("Certificate Error: ", err.Error(), certs[0].Subject.String())
 			cap(score, "T", "Fails common public CA verification. "+err.Error())
 			return
 		}
@@ -1227,9 +1318,9 @@ func scoreProtocol(protocol uint16) (score int) {
 	case tls.VersionSSL30:
 		score = 80
 	case tls.VersionTLS10:
-		score = 90
+		score = 70 // pegged down from 90
 	case tls.VersionTLS11:
-		score = 95
+		score = 85 // pegged down from 95
 	case tls.VersionTLS12:
 		score = 100
 	case VersionTLS13:
@@ -1245,12 +1336,20 @@ func (score *SecurityScore) adjustScore(scan ScanResult) {
 		cap(score, "C", "TLS v1.2 not suported")
 	}
 
+	if supportsSSLV3(scan) {
+		cap(score, "C", "Supports SSL v3. Vulnerable to POODLE attack")
+	}
+
 	if !supportsPFS(scan) {
 		cap(score, "B", "Forward Secrecy not suported")
 	}
 
 	if !supportsAEAD(scan) {
 		cap(score, "B", "Authenticated Encryption (AEAD) not suported")
+	}
+
+	if supportsAnonAuth(scan) {
+		cap(score, "F", "Server supports anonymous (insecure) suites")
 	}
 
 	adjustUsingCertificateSecurity(score, scan)
@@ -1347,11 +1446,25 @@ func supportsTLS12(scan ScanResult) (yes bool) {
 	return
 }
 
+func supportsSSLV3(scan ScanResult) (yes bool) {
+	for _, p := range scan.SupportedProtocols {
+		if p == tls.VersionSSL30 {
+			yes = true
+			break
+		}
+	}
+	return
+}
+
 //check Forward Secrecy support
+// checks that the default cipher selected per every supported protocol is PFS-capable
 func supportsPFS(scan ScanResult) bool {
 	pfs := true
 
 	for _, p := range scan.SupportedProtocols {
+		if p == tls.VersionTLS13 { //TLS v1.3 only soppurts (EC)DHE key exchange: https://tools.ietf.org/html/rfc8446#section-4.1
+			continue
+		}
 		cipher := scan.SelectedCipherByProtocol[p]
 		cc, _ := GetCipherConfig(cipher)
 		if !strings.Contains(cc.KeyExchange, "DHE") {
@@ -1365,10 +1478,34 @@ func supportsPFS(scan ScanResult) bool {
 	return pfs
 }
 
+//check for anonymous authentication
+func supportsAnonAuth(scan ScanResult) bool {
+	anon := false
+
+	for _, p := range scan.SupportedProtocols {
+		if p == tls.VersionTLS13 { //TLS v1.3 will not do such ciphers
+			continue
+		}
+		var ciphers []uint16
+		if scan.HasCipherPreferenceOrderByProtocol[p] {
+			ciphers = scan.CipherPreferenceOrderByProtocol[p]
+		} else {
+			ciphers = scan.CipherSuiteByProtocol[p]
+		}
+		for _, cipher := range ciphers {
+			if cc, err := GetCipherConfig(cipher); err == nil {
+				if cc.Authentication == "anon" {
+					return true
+				}
+			}
+		}
+	}
+	return anon
+}
+
 //check for Authenticate Encryption with Associated Data (AEAD) support
 func supportsAEAD(scan ScanResult) bool {
 	aead := false
-	aeadProtocols := []uint16{tls.VersionTLS12}
 	for _, aeP := range aeadProtocols {
 		for _, p := range scan.SupportedProtocols {
 			if p == aeP {
@@ -1394,6 +1531,7 @@ func supportsAEAD(scan ScanResult) bool {
 	return aead
 }
 
+//see https://github.com/ssllabs/research/wiki/SSL-Server-Rating-Guide
 func toTLSGrade(score int) (grade string) {
 	switch {
 	case score >= 80:

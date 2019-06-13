@@ -210,11 +210,12 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 		for _, tlsVersion := range tlsmodel.TLSVersions {
 			hsc := func(versionOfTLS uint16) <-chan ServerHelloAndCert {
 				config := &gotls.Config{
-					InsecureSkipVerify: true,
-					MinVersion:         versionOfTLS,
-					MaxVersion:         versionOfTLS,
-					CipherSuites:       tlsmodel.AllCipherSuites,
-					NextProtos:         tlsmodel.AllALPNProtos,
+					InsecureSkipVerify:       true,
+					PreferServerCipherSuites: true,
+					MinVersion:               versionOfTLS,
+					MaxVersion:               versionOfTLS,
+					CipherSuites:             tlsmodel.AllCipherSuites,
+					NextProtos:               tlsmodel.AllALPNProtos,
 				}
 				if serverName != "" {
 					config.ServerName = serverName
@@ -230,10 +231,9 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 		}
 		sort.Sort(uint16Sorter(result.SupportedProtocols))
 
-		//chech support for TLS_FALLBACK_SCSV
+		//check support for TLS_FALLBACK_SCSV
 		checkFallbackSCSVSupport(&result, hostnameWithPort, serverName, patientTimeout)
 
-		// fmt.Printf("Got result %s, %s, %#v \n", result.Server, result.Port, result.SupportedProtocols)
 		if !config.ProtocolsOnly {
 			//now test each cipher for only the supported protocols
 			outChannels := []<-chan tlsmodel.HelloAndKey{}
@@ -267,10 +267,12 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 							preference = true
 						} else {
 							config := &gotls.Config{
-								InsecureSkipVerify: true,
-								MinVersion:         tlsVer,
-								MaxVersion:         tlsVer,
-								CipherSuites:       ciphers,
+								InsecureSkipVerify:       true,
+								PreferServerCipherSuites: true,
+								MinVersion:               tlsVer,
+								MaxVersion:               tlsVer,
+								CipherSuites:             ciphers,
+								NextProtos:               tlsmodel.AllALPNProtos,
 							}
 							if serverName != "" {
 								config.ServerName = serverName
@@ -373,6 +375,8 @@ func checkFallbackSCSVSupport(result *tlsmodel.ScanResult, hostnameWithPort, ser
 	maxProtocol := tlsmodel.VersionSSL20
 	if len(result.SupportedProtocols) > 0 {
 		switch result.SupportedProtocols[0] {
+		case tls.VersionTLS13:
+			maxProtocol = tls.VersionTLS12
 		case tls.VersionTLS12:
 			maxProtocol = tls.VersionTLS11
 		case tls.VersionTLS11:
@@ -390,11 +394,12 @@ func checkFallbackSCSVSupport(result *tlsmodel.ScanResult, hostnameWithPort, ser
 		ciphers = append(ciphers, 0x5600) //add TLS_FALLBACK_SCSV last in line with section 4 of https://datatracker.ietf.org/doc/rfc7507/
 
 		config := &gotls.Config{
-			InsecureSkipVerify: true,
-			MinVersion:         maxProtocol,
-			MaxVersion:         maxProtocol,
-			CipherSuites:       ciphers,
-			NextProtos:         tlsmodel.AllALPNProtos,
+			InsecureSkipVerify:       true,
+			PreferServerCipherSuites: true,
+			MinVersion:               maxProtocol,
+			MaxVersion:               maxProtocol,
+			CipherSuites:             ciphers,
+			NextProtos:               tlsmodel.AllALPNProtos,
 		}
 		if serverName != "" {
 			config.ServerName = serverName
@@ -407,7 +412,7 @@ func checkFallbackSCSVSupport(result *tlsmodel.ScanResult, hostnameWithPort, ser
 		defer rawConn.Close()
 		rawConn.SetDeadline(time.Now().Add(patientTimeout))
 		c := gotls.MakeClientConnection(rawConn, config)
-		hello, err := gotls.MakeClientHello(config)
+		hello, _, err := gotls.MakeClientHello(config)
 		if err != nil {
 			return
 		}
@@ -469,6 +474,7 @@ func mergeOrderedCiperChannnels(channels ...<-chan orderedCipherStruct) <-chan o
 }
 
 func process(res ServerHelloAndCert, result *tlsmodel.ScanResult) {
+
 	if res.Err == nil { //protocol supported
 		msg := res.ServerHello
 		c := msg.CipherSuite
@@ -480,13 +486,24 @@ func process(res ServerHelloAndCert, result *tlsmodel.ScanResult) {
 		result.IsSTARTLS = res.StartTLS
 		result.ALPNByProtocol[msg.Vers] = msg.AlpnProtocol
 		result.CertificatesPerProtocol[msg.Vers] = res.Cert
+		if msg.Vers == tls.VersionTLS13 {
+			kx := tlsmodel.ServerKeyExchangeMsg{
+				Key:   msg.ServerShare.Data,
+				Group: msg.ServerShare.Group,
+			}
+			if k, ok := result.KeyExchangeByProtocolByCipher[msg.Vers]; ok {
+				k[c] = kx
+				result.KeyExchangeByProtocolByCipher[msg.Vers] = k
+			} else {
+				result.KeyExchangeByProtocolByCipher[msg.Vers] = make(map[uint16]tlsmodel.ServerKeyExchangeMsg)
+				result.KeyExchangeByProtocolByCipher[msg.Vers][c] = kx
+			}
+		}
 	}
 }
 
 func processConnectionTest(outChannels []<-chan tlsmodel.HelloAndKey, scan *tlsmodel.ScanResult) {
-	count := 0
 	for hk := range mergeHelloKeyChannels(outChannels...) {
-		count++
 		hello := hk.Hello
 		tlsVersion := hello.Vers
 		scan.CipherSuiteByProtocol[tlsVersion] = append(scan.CipherSuiteByProtocol[tlsVersion], hello.CipherSuite)
@@ -535,10 +552,12 @@ func testConnection(hostnameWithPort string, tlsVersion, cipher uint16, startTLS
 	go func() {
 		defer close(out)
 		config := &gotls.Config{
-			InsecureSkipVerify: true,
-			MinVersion:         tlsVersion,
-			MaxVersion:         tlsVersion,
-			CipherSuites:       []uint16{cipher},
+			InsecureSkipVerify:       true,
+			PreferServerCipherSuites: true,
+			MinVersion:               tlsVersion,
+			MaxVersion:               tlsVersion,
+			CipherSuites:             []uint16{cipher},
+			NextProtos:               tlsmodel.AllALPNProtos,
 		}
 		if serverName != "" {
 			config.ServerName = serverName

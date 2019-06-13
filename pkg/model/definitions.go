@@ -96,7 +96,7 @@ var (
 
 	// CipherSuiteMap - list of ciphersuites based on: http://www.iana.org/assignments/tls-parameters/tls-parameters.xml
 	// For CSV: https://www.iana.org/assignments/tls-parameters/tls-parameters-4.csv
-	// reserved/unknown items are excluded.
+	// reserved/unknown/unassigned items are excluded.
 	CipherSuiteMap = map[uint16]string{
 		0x0000: "TLS_NULL_WITH_NULL_NULL",
 		0x0001: "TLS_RSA_WITH_NULL_MD5",
@@ -241,6 +241,11 @@ var (
 		0x00C4: "TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256",
 		0x00C5: "TLS_DH_anon_WITH_CAMELLIA_256_CBC_SHA256",
 		0x00FF: "TLS_EMPTY_RENEGOTIATION_INFO_SCSV",
+		0x1301: "TLS_AES_128_GCM_SHA256",
+		0x1302: "TLS_AES_256_GCM_SHA384",
+		0x1303: "TLS_CHACHA20_POLY1305_SHA256",
+		0x1304: "TLS_AES_128_CCM_SHA256",
+		0x1305: "TLS_AES_128_CCM_8_SHA256",
 		0x5600: "TLS_FALLBACK_SCSV",
 		0xC001: "TLS_ECDH_ECDSA_WITH_NULL_SHA",
 		0xC002: "TLS_ECDH_ECDSA_WITH_RC4_128_SHA",
@@ -434,6 +439,10 @@ var (
 		0xD005: "TLS_ECDHE_PSK_WITH_AES_128_CCM_SHA256",
 	}
 
+	//TLS13Ciphers are newly introduced IANA ciphers for TLS v1.3
+	TLS13Ciphers = []uint16{
+		0x1301, 0x1302, 0x1303, 0x1304, 0x1305,
+	}
 	// AllCipherSuites is the numerical values of the ciphersuites
 	AllCipherSuites []uint16
 
@@ -443,7 +452,7 @@ var (
 	//VersionTLS13 is the protocol code of TLS v1.3 see https://datatracker.ietf.org/doc/rfc8446
 	VersionTLS13 uint16 = 0x0304
 	//TLSVersions an array of supported TLS versions
-	TLSVersions = []uint16{VersionSSL20, tls.VersionSSL30, tls.VersionTLS10, tls.VersionTLS11, tls.VersionTLS12}
+	TLSVersions = []uint16{VersionSSL20, tls.VersionSSL30, tls.VersionTLS10, tls.VersionTLS11, tls.VersionTLS12, tls.VersionTLS13}
 	//TLSVersionMap a mapping from TLS version to a string representation
 	TLSVersionMap = map[uint16]string{
 		VersionSSL20:     "SSL v2.0",
@@ -451,7 +460,7 @@ var (
 		tls.VersionTLS10: "TLS v1.0",
 		tls.VersionTLS11: "TLS v1.1",
 		tls.VersionTLS12: "TLS v1.2",
-		VersionTLS13:     "TLS v1.3",
+		tls.VersionTLS13: "TLS v1.3",
 	}
 
 	//AllALPNProtos Application Layer Protocol Negotiation. See defined list at https://tools.ietf.org/html/rfc7301#section-6
@@ -459,6 +468,19 @@ var (
 
 	//NkxErrorMessage error message
 	NkxErrorMessage = "Not a key exchange message"
+
+	//ECDSASignatureAlgorithms ECDSA algorithms
+	ECDSASignatureAlgorithms = []tls.SignatureScheme{
+		tls.ECDSAWithP521AndSHA512,
+		tls.ECDSAWithP384AndSHA384,
+		tls.ECDSAWithP256AndSHA256,
+		tls.ECDSAWithSHA1,
+	}
+
+	//TLS13KeyExchange is a constant to identify a key exchange or MAC/PRF in a TLS3 cipher
+	TLS13KeyExchange = "TLS3"
+
+	aeadProtocols = []uint16{tls.VersionTLS12, tls.VersionTLS13}
 )
 
 func init() {
@@ -467,7 +489,7 @@ func init() {
 
 // GetAllCipherSuiteNumbers returns all the cipher suit numerical values
 func GetAllCipherSuiteNumbers() []uint16 {
-	keys := make([]uint16, 0, len(CipherSuiteMap))
+	keys := []uint16{}
 	for k := range CipherSuiteMap {
 		if k != 0x5600 { // exclude TLS_FALLBACK_SCSV
 			keys = append(keys, k)

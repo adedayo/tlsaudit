@@ -96,6 +96,9 @@ func RealtimeAdvancedScan(w http.ResponseWriter, req *http.Request) {
 						return
 					}
 				}
+				if psr.Request.Config.PacketsPerSecond <= 0 {
+					return
+				}
 				scanID := psr.Request.ScanID
 
 				//callback function to stream results over a websocket

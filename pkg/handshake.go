@@ -37,7 +37,7 @@ func HandShakeUpToKeyExchange(hostname string, config *gotls.Config, startTLS bo
 		c = gotls.MakeClientConnection(rawConn, config)
 	}
 
-	hello, err := gotls.MakeClientHello(config)
+	hello, ecdheParameters, err := gotls.MakeClientHello(config)
 	if err != nil {
 		return hk, err
 	}
@@ -52,7 +52,7 @@ func HandShakeUpToKeyExchange(hostname string, config *gotls.Config, startTLS bo
 		return hk, err
 	}
 
-	k, err := c.ReadServerKeyExchange()
+	k, err := c.ReadServerKeyExchange(hello, &serverHello, ecdheParameters)
 
 	if err != nil {
 		return tlsmodel.HelloAndKey{Hello: serverHello, Key: k, HasKey: false}, err
@@ -92,7 +92,7 @@ func HandShakeClientHello(hostname string, config *gotls.Config, startTLS bool, 
 
 	}
 
-	hello, err := gotls.MakeClientHello(config)
+	hello, _, err := gotls.MakeClientHello(config)
 	if err != nil {
 		return serverHello, err
 	}
@@ -113,7 +113,6 @@ func HandShakeClientHelloGetServerCert(hostname string, config *gotls.Config, ti
 		defer close(hs)
 		serverHello := tlsmodel.ServerHelloMessage{}
 		certs := tlsmodel.CertificateMessage{}
-		// dialer := new(net.Dialer)
 		rawConn, err := net.DialTimeout("tcp", hostname, timeout)
 		if err != nil {
 			hs <- ServerHelloAndCert{ServerHello: serverHello, Cert: certs, Err: err}
@@ -123,20 +122,20 @@ func HandShakeClientHelloGetServerCert(hostname string, config *gotls.Config, ti
 		rawConn.SetDeadline(time.Now().Add(timeout))
 		c := gotls.MakeClientConnection(rawConn, config)
 
-		hello, err := gotls.MakeClientHello(config)
+		clientHello, ecdheParameters, err := gotls.MakeClientHello(config)
 		if err != nil {
 			hs <- ServerHelloAndCert{ServerHello: serverHello, Cert: certs, Err: err}
 			return
 		}
 
 		// send ClientHello
-		if _, err := c.WriteRecord(gotls.RecordTypeHandshake, hello.Marshal()); err != nil {
+		if _, err := c.WriteRecord(gotls.RecordTypeHandshake, clientHello.Marshal()); err != nil {
 			hs <- ServerHelloAndCert{ServerHello: serverHello, Cert: certs, Err: err}
 			return
 		}
 
 		serverHello, err = c.ReadServerHello()
-
+		startTLS := false
 		if err != nil {
 			//If ServerHello fails, check STARTTLS
 			rawConn2, err := net.DialTimeout("tcp", hostname, timeout)
@@ -150,16 +149,16 @@ func HandShakeClientHelloGetServerCert(hostname string, config *gotls.Config, ti
 			if err != nil {
 				hs <- ServerHelloAndCert{ServerHello: serverHello, Cert: certs, Err: err}
 			}
-			c := gotls.MakeClientConnection(rawConn2, config)
+			c = gotls.MakeClientConnection(rawConn2, config)
 
-			hello, err := gotls.MakeClientHello(config)
+			clientHello, ecdheParameters, err = gotls.MakeClientHello(config)
 			if err != nil {
 				hs <- ServerHelloAndCert{ServerHello: serverHello, Cert: certs, Err: err}
 				return
 			}
 
 			// send ClientHello
-			if _, err := c.WriteRecord(gotls.RecordTypeHandshake, hello.Marshal()); err != nil {
+			if _, err := c.WriteRecord(gotls.RecordTypeHandshake, clientHello.Marshal()); err != nil {
 				hs <- ServerHelloAndCert{ServerHello: serverHello, Cert: certs, Err: err}
 				return
 			}
@@ -169,13 +168,10 @@ func HandShakeClientHelloGetServerCert(hostname string, config *gotls.Config, ti
 				hs <- ServerHelloAndCert{ServerHello: serverHello, Cert: certs, Err: err}
 				return
 			}
-
-			certs, err = c.ReadServerCertificate()
-			hs <- ServerHelloAndCert{ServerHello: serverHello, StartTLS: true, Cert: certs, Err: err}
-			return
+			startTLS = true
 		}
-		certs, err = c.ReadServerCertificate()
-		hs <- ServerHelloAndCert{ServerHello: serverHello, Cert: certs, Err: err}
+		certs, err = c.ReadServerCertificate(clientHello, &serverHello, ecdheParameters)
+		hs <- ServerHelloAndCert{ServerHello: serverHello, StartTLS: startTLS, Cert: certs, Err: err}
 		return
 	}()
 	return hs
