@@ -229,6 +229,20 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 		for res := range mergeHandShakeChannels(handshakeChannels...) {
 			process(res, &result)
 		}
+
+		//ensure supported protocols are unique
+		if len(result.SupportedProtocols) > 1 {
+			protocols := make(map[uint16]bool)
+			for _, p := range result.SupportedProtocols {
+				protocols[p] = true
+			}
+			supported := []uint16{}
+			for p := range protocols {
+				supported = append(supported, p)
+			}
+			result.SupportedProtocols = supported
+		}
+
 		sort.Sort(uint16Sorter(result.SupportedProtocols))
 
 		//check support for TLS_FALLBACK_SCSV

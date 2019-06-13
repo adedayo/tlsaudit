@@ -137,7 +137,6 @@ func (cc *CipherConfig) getAuthPerf() int {
 		return 10
 	case "SRP":
 		return 10
-
 	}
 	if strings.Contains(cc.Cipher, "SCSV") {
 		//these are signalling ciphers just return a large multiplier
