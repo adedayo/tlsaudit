@@ -4,7 +4,7 @@ go 1.12
 
 require (
 	github.com/AndreasBriese/bbloom v0.0.0-20190306092124-e2d15f34fcf9 // indirect
-	github.com/adedayo/cidr v0.1.3
+	github.com/adedayo/cidr v0.1.4
 	github.com/adedayo/tcpscan v0.5.6
 	github.com/adedayo/tls-stats v0.0.1 // indirect
 	github.com/carlescere/scheduler v0.0.0-20170109141437-ee74d2f83d82

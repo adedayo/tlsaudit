@@ -62,7 +62,6 @@ func (c *Conn) ReadServerCertificate(clientHello *clientHelloMsg, sHello *tlsmod
 
 			// In TLS 1.3, session tickets are delivered after the handshake.
 			if err := processTLS13Handshake(hs); err != nil {
-				println("Failed", clientHello.cipherSuites[0])
 				return certMessage, err
 			}
 

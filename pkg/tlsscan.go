@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	cidrlib "github.com/adedayo/cidr"
 	portscan "github.com/adedayo/tcpscan"
 	gotls "github.com/adedayo/tlsaudit/pkg/golang"
 	tlsmodel "github.com/adedayo/tlsaudit/pkg/model"
@@ -28,6 +29,7 @@ type orderedCipherStruct struct {
 }
 
 //ScanCIDRTLS combines a port scan with TLS scan for a CIDR range to return the open ports, and the TLS setting for each port over the result channel
+//If port ranges are specified, will not do a port scan to discover open ports
 func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanResult {
 	scanResults := make(chan tlsmodel.ScanResult)
 	defer func() {
@@ -40,11 +42,18 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 		defer close(scanResults)
 		scan := make(map[string]portscan.PortACK)
 		resultChannels := []<-chan tlsmodel.ScanResult{}
-		result := portscan.ScanCIDR(portscan.ScanConfig{
-			Timeout:          config.Timeout,
-			PacketsPerSecond: config.PacketsPerSecond,
-			Quiet:            true,
-		}, cidr)
+		var result <-chan portscan.PortACK
+		if strings.Count(cidr, ":") == 1 {
+			// cidrlib.extractPorts(cidr)
+			result = generateFakeACKs(cidr)
+
+		} else {
+			result = portscan.ScanCIDR(portscan.ScanConfig{
+				Timeout:          config.Timeout,
+				PacketsPerSecond: config.PacketsPerSecond,
+				Quiet:            true,
+			}, cidr)
+		}
 
 		select {
 		case <-time.After(12 * time.Duration(config.Timeout) * time.Second):
@@ -90,6 +99,28 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 		}
 	}()
 	return scanResults
+}
+
+func generateFakeACKs(cidr string) <-chan portscan.PortACK {
+	output := make(chan portscan.PortACK)
+	go func() {
+		defer close(output)
+		cidrRange, ports, err := cidrlib.ExpandWithPort(cidr)
+		if err != nil {
+			return
+		}
+		for _, pp := range ports {
+			port := fmt.Sprintf("%d", pp)
+			for _, host := range cidrRange {
+				output <- portscan.PortACK{
+					Host: host,
+					Port: port,
+					SYN:  true,
+				}
+			}
+		}
+	}()
+	return output
 }
 
 func mergeACKChannels(ackChannels ...<-chan portscan.PortACK) <-chan portscan.PortACK {
@@ -182,6 +213,17 @@ func mergeHelloKeyChannels(channels ...<-chan tlsmodel.HelloAndKey) <-chan tlsmo
 	return out
 }
 
+func getTLSConfig(tlsVersion uint16) *gotls.Config {
+	return &gotls.Config{
+		InsecureSkipVerify:       true,
+		PreferServerCipherSuites: true,
+		MinVersion:               tlsVersion,
+		MaxVersion:               tlsVersion,
+		NextProtos:               tlsmodel.AllALPNProtos,
+	}
+
+}
+
 //scanHost finds whether a port on a host supports TLS and if so what protocols and ciphers are supported
 func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverName string) chan tlsmodel.ScanResult {
 	resultChannel := make(chan tlsmodel.ScanResult)
@@ -209,14 +251,8 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 		//check for protocol support with all ciphersuites present
 		for _, tlsVersion := range tlsmodel.TLSVersions {
 			hsc := func(versionOfTLS uint16) <-chan ServerHelloAndCert {
-				config := &gotls.Config{
-					InsecureSkipVerify:       true,
-					PreferServerCipherSuites: true,
-					MinVersion:               versionOfTLS,
-					MaxVersion:               versionOfTLS,
-					CipherSuites:             tlsmodel.AllCipherSuites,
-					NextProtos:               tlsmodel.AllALPNProtos,
-				}
+				config := getTLSConfig(versionOfTLS)
+				config.CipherSuites = tlsmodel.AllCipherSuites
 				if serverName != "" {
 					config.ServerName = serverName
 				}
@@ -280,14 +316,8 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 							//single cipher is assumed to support ordering ;-)
 							preference = true
 						} else {
-							config := &gotls.Config{
-								InsecureSkipVerify:       true,
-								PreferServerCipherSuites: true,
-								MinVersion:               tlsVer,
-								MaxVersion:               tlsVer,
-								CipherSuites:             ciphers,
-								NextProtos:               tlsmodel.AllALPNProtos,
-							}
+							config := getTLSConfig(tlsVer)
+							config.CipherSuites = ciphers
 							if serverName != "" {
 								config.ServerName = serverName
 							}
@@ -407,14 +437,8 @@ func checkFallbackSCSVSupport(result *tlsmodel.ScanResult, hostnameWithPort, ser
 		}
 		ciphers = append(ciphers, 0x5600) //add TLS_FALLBACK_SCSV last in line with section 4 of https://datatracker.ietf.org/doc/rfc7507/
 
-		config := &gotls.Config{
-			InsecureSkipVerify:       true,
-			PreferServerCipherSuites: true,
-			MinVersion:               maxProtocol,
-			MaxVersion:               maxProtocol,
-			CipherSuites:             ciphers,
-			NextProtos:               tlsmodel.AllALPNProtos,
-		}
+		config := getTLSConfig(maxProtocol)
+		config.CipherSuites = ciphers
 		if serverName != "" {
 			config.ServerName = serverName
 		}
@@ -565,14 +589,8 @@ func testConnection(hostnameWithPort string, tlsVersion, cipher uint16, startTLS
 	out := make(chan tlsmodel.HelloAndKey)
 	go func() {
 		defer close(out)
-		config := &gotls.Config{
-			InsecureSkipVerify:       true,
-			PreferServerCipherSuites: true,
-			MinVersion:               tlsVersion,
-			MaxVersion:               tlsVersion,
-			CipherSuites:             []uint16{cipher},
-			NextProtos:               tlsmodel.AllALPNProtos,
-		}
+		config := getTLSConfig(tlsVersion)
+		config.CipherSuites = []uint16{cipher}
 		if serverName != "" {
 			config.ServerName = serverName
 		}

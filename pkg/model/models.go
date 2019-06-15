@@ -20,12 +20,12 @@ import (
 	"time"
 )
 
-// Signature algorithms for TLS 1.2 (See RFC 5246, section A.4.1)
-const (
-	signatureAnonymous = 0
-	signatureRSA       = 1
-	signatureDSA       = 2
-	signatureECDSA     = 3
+var (
+	//tls13KeyExchange is a constant to identify a key exchange or MAC/PRF in a TLS3 cipher
+	tls13KeyExchange = "TLSv1.3"
+
+	//NkxErrorMessage error message
+	NkxErrorMessage = "Not a key exchange message"
 )
 
 //CipherConfig extracts the important elements of a Ciphersuit based on its name
@@ -77,7 +77,7 @@ func (cc *CipherConfig) getKXPerfMultiplier(config CipherConfigParameters) int {
 		return rsaPerformanceMultiplier(config.RSABitLength)
 	}
 	if cc.usesDHKeyExchange() {
-		return dhPerformanceMultiplier(config.NamedCurveStrength)
+		return dhPerformanceMultiplier(config.SupportedGroupStrength)
 	}
 	return 10
 }
@@ -392,18 +392,18 @@ func (cc *CipherConfig) GetKeyExchangeKeyLength(cipher, protocol uint16, scan Sc
 			if kex, ok := ex[cipher]; ok {
 				if key := kex.Key; len(key) > 2 {
 					cid := uint16(key[1])<<8 | uint16(key[2])
-					if k, ok := NamedCurveStrength[cid]; ok {
+					if k, ok := SupportedGroupStrength[cid]; ok {
 						kl = k
 					}
 				}
 			}
 		}
 
-	case strings.Contains(kx, TLS13KeyExchange):
+	case strings.Contains(kx, tls13KeyExchange):
 		if ex, ok := scan.KeyExchangeByProtocolByCipher[protocol]; ok {
 			if kex, ok := ex[cipher]; ok {
 				if cid := uint16(kex.Group); cid != 0 {
-					if k, ok := NamedCurveStrength[cid]; ok {
+					if k, ok := SupportedGroupStrength[cid]; ok {
 						kl = k
 					}
 				}
@@ -423,7 +423,7 @@ func (cc *CipherConfig) getContextFreeKeyExchangeKeyLength(config CipherConfigPa
 		return config.RSABitLength
 	}
 	if cc.usesDHKeyExchange() {
-		return config.NamedCurveStrength
+		return config.SupportedGroupStrength
 	}
 	return -1
 }
@@ -492,14 +492,14 @@ func (cc *CipherConfig) GetMACPRFStrength() int {
 
 //EnumerateCipherMetrics enumerates metrics for ciphers along multiple config axes
 func EnumerateCipherMetrics() (metrics []CipherMetrics) {
-	strengthToNamedCurves := make(map[int][]string)
+	strengthToSupportedGroups := make(map[int][]string)
 
-	for nc, kx := range NamedCurveStrength {
+	for nc, kx := range SupportedGroupStrength {
 		if kx >= 0 && kx == 3072 {
-			if ncs, present := strengthToNamedCurves[kx]; present {
-				strengthToNamedCurves[kx] = append(ncs, NamedCurves[nc])
+			if ncs, present := strengthToSupportedGroups[kx]; present {
+				strengthToSupportedGroups[kx] = append(ncs, SupportedGroups[nc])
 			} else {
-				strengthToNamedCurves[kx] = []string{NamedCurves[nc]}
+				strengthToSupportedGroups[kx] = []string{SupportedGroups[nc]}
 			}
 		}
 	}
@@ -514,10 +514,10 @@ func EnumerateCipherMetrics() (metrics []CipherMetrics) {
 	}
 
 	dheParams := []CipherConfigParameters{}
-	for kx := range strengthToNamedCurves {
+	for kx := range strengthToSupportedGroups {
 		dheParams = append(dheParams, CipherConfigParameters{
-			NamedCurveStrength: kx,
-			NamedCurves:        strengthToNamedCurves[kx],
+			SupportedGroupStrength: kx,
+			SupportedGroups:        strengthToSupportedGroups[kx],
 		})
 	}
 
@@ -555,9 +555,9 @@ func EnumerateCipherMetrics() (metrics []CipherMetrics) {
 
 //CipherConfigParameters contains information about Parameters for determining the key length of key exchange algorithms and other cipher parameters
 type CipherConfigParameters struct {
-	RSABitLength       int //The RSA key from the certificate
-	NamedCurveStrength int
-	NamedCurves        []string //The named curves that have the indicated strength
+	RSABitLength           int //The RSA key from the certificate
+	SupportedGroupStrength int
+	SupportedGroups        []string //The Supported Groups that have the indicated strength
 }
 
 //CipherMetrics are various metrics of interest to compare ciphers as the bases for various desirable property ordering such as security and performance
@@ -586,11 +586,11 @@ func getCipherConfig13(cipher uint16) (config CipherConfig, err error) {
 	if cipherName, exists := CipherSuiteMap[cipher]; exists {
 		config.CipherID = cipher
 		config.Cipher = cipherName
-		config.KeyExchange = TLS13KeyExchange
-		config.Authentication = TLS13KeyExchange
+		config.KeyExchange = tls13KeyExchange
+		config.Authentication = tls13KeyExchange
 		cipherName = strings.TrimPrefix(cipherName, "TLS_")
 		//set these values temporarily
-		config.MACPRF = TLS13KeyExchange
+		config.MACPRF = tls13KeyExchange
 		config.Encryption = cipherName
 		if strings.Contains(cipherName, "SHA256") {
 			config.MACPRF = "SHA256"
@@ -759,6 +759,8 @@ type ScanConfig struct {
 	PacketsPerSecond int
 	//Suppress certificate output
 	HideCerts bool
+	//Suppress output of TLS status of closed ports or ports with no TLS
+	HideNoTLS bool
 	//control whether to produce a running commentary of scan progress or stay quiet till the end
 	Quiet       bool
 	ServicePort int
@@ -990,13 +992,13 @@ func getCurve(protocol, cipher uint16, scan ScanResult) string {
 	if c, ok := scan.KeyExchangeByProtocolByCipher[protocol]; ok {
 		if ex, ok := c[cipher]; ok {
 			if cid := uint16(ex.Group); cid != 0 { // we would have set the CurveID group in TLS v1.3 and above
-				curveID = fmt.Sprintf(" (Named Curve: %s)", NamedCurves[cid])
+				curveID = fmt.Sprintf(" (Supported Group: %s)", SupportedGroups[cid])
 			} else {
 				key := ex.Key
 				if len(key) > 4 && key[0] == 3 {
-					//named curve
+					//Supported Group
 					cid := uint16(key[1])<<8 | uint16(key[2])
-					curveID = fmt.Sprintf(" (Named Curve: %s)", NamedCurves[cid])
+					curveID = fmt.Sprintf(" (Supported Group: %s)", SupportedGroups[cid])
 				}
 			}
 		}
@@ -1146,6 +1148,9 @@ func (s ScanResult) ToString(config ScanConfig) (result string) {
 	}
 	result += fmt.Sprintf("%s (%s)\n\tPort: %s\n", s.Server, hostname, s.Port)
 	if len(s.SupportedProtocols) == 0 {
+		if config.HideNoTLS {
+			return ""
+		}
 		result += "\tNo supported SSL/TLS protocol found\n"
 	} else {
 		sortedSupportedProtocols := s.SupportedProtocols
@@ -1371,8 +1376,8 @@ func adjustUsingCertificateSecurity(score *SecurityScore, scan ScanResult) {
 		}
 		for _, cert := range certs {
 			publicKey := cert.PublicKey
-			switch cert.SignatureAlgorithm {
-			case signatureRSA:
+			switch cert.PublicKeyAlgorithm {
+			case x509.RSA:
 				if pk, ok := publicKey.(*rsa.PublicKey); ok {
 					bitlength := pk.N.BitLen()
 					switch {
@@ -1384,7 +1389,7 @@ func adjustUsingCertificateSecurity(score *SecurityScore, scan ScanResult) {
 				} else {
 					cap(score, "T", fmt.Sprintf("Got malformed public key format"))
 				}
-			case signatureECDSA:
+			case x509.ECDSA:
 				if pk, ok := publicKey.(*ecdsa.PublicKey); ok {
 					bitlength := pk.Y.BitLen()
 					switch {
@@ -1396,7 +1401,7 @@ func adjustUsingCertificateSecurity(score *SecurityScore, scan ScanResult) {
 				} else {
 					cap(score, "T", fmt.Sprintf("Got malformed public key format"))
 				}
-			case signatureDSA:
+			case x509.DSA:
 				if pk, ok := publicKey.(*dsa.PublicKey); ok {
 					bitlength := pk.Y.BitLen()
 					switch {
@@ -1408,8 +1413,8 @@ func adjustUsingCertificateSecurity(score *SecurityScore, scan ScanResult) {
 				} else {
 					cap(score, "T", fmt.Sprintf("Got malformed public key format"))
 				}
-			case signatureAnonymous:
-				cap(score, "T", "Using anonymous signature algorithm")
+			case x509.UnknownPublicKeyAlgorithm:
+				cap(score, "T", "Using anonymous/unknown signature algorithm")
 			}
 
 			sigAlgo := cert.SignatureAlgorithm.String()
@@ -1505,7 +1510,7 @@ func supportsAnonAuth(scan ScanResult) bool {
 //check for Authenticate Encryption with Associated Data (AEAD) support
 func supportsAEAD(scan ScanResult) bool {
 	aead := false
-	for _, aeP := range aeadProtocols {
+	for _, aeP := range AEADProtocols {
 		for _, p := range scan.SupportedProtocols {
 			if p == aeP {
 				var ciphers []uint16

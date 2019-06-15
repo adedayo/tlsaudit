@@ -75,13 +75,14 @@ func Execute(version string) {
 }
 
 var output, input, service string
-var jsonOut, protocolsOnly, hideCerts, quiet, cipherMetrics bool
+var jsonOut, protocolsOnly, hideCerts, quiet, cipherMetrics, hideNoTLS bool
 var timeout, rate, api int
 
 func init() {
 	rootCmd.Flags().BoolVarP(&jsonOut, "json", "j", false, "generate JSON output")
 	rootCmd.Flags().BoolVarP(&protocolsOnly, "protocols-only", "p", false, "only check supported protocols - will not do detailed checks on supported ciphers (default: false)")
 	rootCmd.Flags().BoolVarP(&hideCerts, "hide-certs", "c", false, "suppress certificate information in output (default: false)")
+	rootCmd.Flags().BoolVar(&hideNoTLS, "hide-no-tls", false, "suppress the display of ports with no TLS support in output. Note that non-open ports will be shown as not supporting TLS when ports are explicitly specified in the host to audit, bypassing host port scan, which makes this flag particularly useful (default: false)")
 	rootCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "control whether to produce a running commentary of progress or stay quiet till the end (default: false)")
 	rootCmd.Flags().IntVarP(&timeout, "timeout", "t", 5, "TIMEOUT (in seconds) to adjust how much we are willing to wait for servers to come back with responses. Smaller timeout sacrifices accuracy for speed")
 	rootCmd.Flags().IntVarP(&rate, "rate", "r", 1000, "the rate (in packets per second) that we should use to scan for open ports")
@@ -140,6 +141,7 @@ func runner(cmd *cobra.Command, args []string) error {
 		Timeout:          timeout,
 		PacketsPerSecond: rate,
 		HideCerts:        hideCerts,
+		HideNoTLS:        hideNoTLS,
 		Quiet:            quiet,
 	}
 

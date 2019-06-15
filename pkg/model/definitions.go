@@ -5,9 +5,9 @@ import (
 )
 
 var (
-	//NamedCurves are named elliptic curve
+	//SupportedGroups are named elliptic curve
 	//see https://www.iana.org/assignments/tls-parameters/tls-parameters.xml#tls-parameters-8
-	NamedCurves = map[uint16]string{
+	SupportedGroups = map[uint16]string{
 		0:     "Reserved",
 		1:     "sect163k1",
 		2:     "sect163r1",
@@ -48,12 +48,12 @@ var (
 		65282: "arbitrary_explicit_char2_curves",
 	}
 
-	//NamedCurveStrength maps named eliptic curve to comparable RSA length
+	//SupportedGroupStrength maps named eliptic curve to comparable RSA length
 	//For comparable strengths of EC named curves see
 	//1. https://www.ietf.org/rfc/rfc5114.txt (see section 4, security considerations)
 	//2. https://www.ietf.org/rfc/rfc5480.txt and
 	//3. pp 133 https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-56Ar3.pdf
-	NamedCurveStrength = map[uint16]int{
+	SupportedGroupStrength = map[uint16]int{
 		0:     -1,
 		1:     -1,
 		2:     -1,
@@ -93,6 +93,9 @@ var (
 		65281: -1,
 		65282: -1,
 	}
+
+	//AllSupportedGroups are IANA-defined supported groups. Please see https://www.iana.org/assignments/tls-parameters/tls-parameters.xml#tls-parameters-8
+	AllSupportedGroups []uint16
 
 	// CipherSuiteMap - list of ciphersuites based on: http://www.iana.org/assignments/tls-parameters/tls-parameters.xml
 	// For CSV: https://www.iana.org/assignments/tls-parameters/tls-parameters-4.csv
@@ -439,7 +442,7 @@ var (
 		0xD005: "TLS_ECDHE_PSK_WITH_AES_128_CCM_SHA256",
 	}
 
-	//TLS13Ciphers are newly introduced IANA ciphers for TLS v1.3
+	//TLS13Ciphers are newly-introduced IANA ciphers for TLS v1.3
 	TLS13Ciphers = []uint16{
 		0x1301, 0x1302, 0x1303, 0x1304, 0x1305,
 	}
@@ -466,29 +469,47 @@ var (
 	//AllALPNProtos Application Layer Protocol Negotiation. See defined list at https://tools.ietf.org/html/rfc7301#section-6
 	AllALPNProtos = []string{"spdy/3", "spdy/2", "spdy/1", "http/1.1"}
 
-	//NkxErrorMessage error message
-	NkxErrorMessage = "Not a key exchange message"
+	//AllSignatureSchemes all signature schemes
+	AllSignatureSchemes = []tls.SignatureScheme{
+		// RSASSA-PKCS1-v1_5 algorithms.
+		tls.PKCS1WithSHA256,
+		tls.PKCS1WithSHA384,
+		tls.PKCS1WithSHA512,
 
-	//ECDSASignatureAlgorithms ECDSA algorithms
-	ECDSASignatureAlgorithms = []tls.SignatureScheme{
+		// RSASSA-PSS algorithms with public key OID rsaEncryption.
+		tls.PSSWithSHA256,
+		tls.PSSWithSHA384,
+		tls.PSSWithSHA512,
+
+		// ECDSA algorithms. Only constrained to a specific curve in TLS 1.3.
+		tls.ECDSAWithP256AndSHA256,
+		tls.ECDSAWithP384AndSHA384,
+		tls.ECDSAWithP521AndSHA512,
+
+		// Legacy signature and hash algorithms for TLS 1.2.
+		tls.PKCS1WithSHA1,
+		tls.ECDSAWithSHA1,
+	}
+
+	//ECDSASignatureSchemes ECDSA schemes
+	ECDSASignatureSchemes = []tls.SignatureScheme{
 		tls.ECDSAWithP521AndSHA512,
 		tls.ECDSAWithP384AndSHA384,
 		tls.ECDSAWithP256AndSHA256,
 		tls.ECDSAWithSHA1,
 	}
 
-	//TLS13KeyExchange is a constant to identify a key exchange or MAC/PRF in a TLS3 cipher
-	TLS13KeyExchange = "TLS3"
-
-	aeadProtocols = []uint16{tls.VersionTLS12, tls.VersionTLS13}
+	//AEADProtocols are TLS protocols that are capable of Authenticated Encruption with Associated Data
+	AEADProtocols = []uint16{tls.VersionTLS12, tls.VersionTLS13}
 )
 
 func init() {
-	AllCipherSuites = GetAllCipherSuiteNumbers()
+	AllCipherSuites = getAllCipherSuiteIDs()
+	AllSupportedGroups = getAllSupportedGroupIDs()
 }
 
-// GetAllCipherSuiteNumbers returns all the cipher suit numerical values
-func GetAllCipherSuiteNumbers() []uint16 {
+// getAllCipherSuiteIDs returns all the cipher suite numerical values
+func getAllCipherSuiteIDs() []uint16 {
 	keys := []uint16{}
 	for k := range CipherSuiteMap {
 		if k != 0x5600 { // exclude TLS_FALLBACK_SCSV
@@ -496,4 +517,12 @@ func GetAllCipherSuiteNumbers() []uint16 {
 		}
 	}
 	return keys
+}
+
+func getAllSupportedGroupIDs() []uint16 {
+	ids := []uint16{}
+	for id := range SupportedGroups {
+		ids = append(ids, id)
+	}
+	return ids
 }
