@@ -6,10 +6,11 @@ builds:
     - darwin
   goarch:
     - amd64
-archive:
-  replacements:
-    darwin: Darwin
-    amd64: x86_64
+archives:
+    - id: darwin
+      replacements:
+        darwin: Darwin
+        amd64: x86_64
 checksum:
   name_template: 'checksums.txt'
 snapshot:
@@ -23,9 +24,10 @@ changelog:
 before:
    hooks:
    - go mod download
-brew:
-  github:
-    owner: adedayo
-    name: homebrew-tap
-  homepage: "https://github.com/adedayo/tlsaudit"
-  description: "tlsaudit is a utility for auditing TLS (including SSL and STARTTLS) security settings. You can use it to enumerate protocols, ciphers and curves supported by an open TCP port."
+brews:
+  -
+    github:
+      owner: adedayo
+      name: homebrew-tap
+    homepage: "https://github.com/adedayo/tlsaudit"
+    description: "tlsaudit is a utility for auditing TLS (including SSL and STARTTLS) security settings. You can use it to enumerate protocols, ciphers and curves supported by an open TCP port."
