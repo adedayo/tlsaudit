@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	tlsdefs "github.com/adedayo/tls-definitions"
 )
 
 var (
@@ -392,7 +394,7 @@ func (cc *CipherConfig) GetKeyExchangeKeyLength(cipher, protocol uint16, scan Sc
 			if kex, ok := ex[cipher]; ok {
 				if key := kex.Key; len(key) > 2 {
 					cid := uint16(key[1])<<8 | uint16(key[2])
-					if k, ok := SupportedGroupStrength[cid]; ok {
+					if k, ok := tlsdefs.SupportedGroupStrength[cid]; ok {
 						kl = k
 					}
 				}
@@ -403,7 +405,7 @@ func (cc *CipherConfig) GetKeyExchangeKeyLength(cipher, protocol uint16, scan Sc
 		if ex, ok := scan.KeyExchangeByProtocolByCipher[protocol]; ok {
 			if kex, ok := ex[cipher]; ok {
 				if cid := uint16(kex.Group); cid != 0 {
-					if k, ok := SupportedGroupStrength[cid]; ok {
+					if k, ok := tlsdefs.SupportedGroupStrength[cid]; ok {
 						kl = k
 					}
 				}
@@ -494,12 +496,12 @@ func (cc *CipherConfig) GetMACPRFStrength() int {
 func EnumerateCipherMetrics() (metrics []CipherMetrics) {
 	strengthToSupportedGroups := make(map[int][]string)
 
-	for nc, kx := range SupportedGroupStrength {
+	for nc, kx := range tlsdefs.SupportedGroupStrength {
 		if kx >= 0 && kx == 3072 {
 			if ncs, present := strengthToSupportedGroups[kx]; present {
-				strengthToSupportedGroups[kx] = append(ncs, SupportedGroups[nc])
+				strengthToSupportedGroups[kx] = append(ncs, tlsdefs.SupportedGroups[nc])
 			} else {
-				strengthToSupportedGroups[kx] = []string{SupportedGroups[nc]}
+				strengthToSupportedGroups[kx] = []string{tlsdefs.SupportedGroups[nc]}
 			}
 		}
 	}
@@ -524,7 +526,7 @@ func EnumerateCipherMetrics() (metrics []CipherMetrics) {
 	ccs := []CipherConfig{}
 
 	dummyConfig := CipherConfigParameters{}
-	for c := range CipherSuiteMap {
+	for c := range tlsdefs.CipherSuiteMap {
 		if cc, err := GetCipherConfig(c); err == nil {
 			ccs = append(ccs, cc)
 		}
@@ -574,7 +576,7 @@ type CipherMetrics struct {
 }
 
 func isTLS13Cipher(cipher uint16) bool {
-	for _, x := range TLS13Ciphers {
+	for _, x := range tlsdefs.TLS13Ciphers {
 		if x == cipher {
 			return true
 		}
@@ -583,7 +585,7 @@ func isTLS13Cipher(cipher uint16) bool {
 }
 
 func getCipherConfig13(cipher uint16) (config CipherConfig, err error) {
-	if cipherName, exists := CipherSuiteMap[cipher]; exists {
+	if cipherName, exists := tlsdefs.CipherSuiteMap[cipher]; exists {
 		config.CipherID = cipher
 		config.Cipher = cipherName
 		config.KeyExchange = tls13KeyExchange
@@ -608,7 +610,7 @@ func getCipherConfig13(cipher uint16) (config CipherConfig, err error) {
 //GetCipherConfig extracts a `CipherConfig` using the Cipher's IANA string name
 // Details here https://www.iana.org/assignments/tls-parameters/tls-parameters.txt
 func GetCipherConfig(cipher uint16) (config CipherConfig, err error) {
-	if cipherName, exists := CipherSuiteMap[cipher]; exists {
+	if cipherName, exists := tlsdefs.CipherSuiteMap[cipher]; exists {
 		config.CipherID = cipher
 		config.Cipher = cipherName
 		if cipherName == "TLS_EMPTY_RENEGOTIATION_INFO_SCSV" || cipherName == "TLS_FALLBACK_SCSV" {
@@ -992,18 +994,18 @@ func getCurve(protocol, cipher uint16, scan ScanResult) string {
 	if c, ok := scan.KeyExchangeByProtocolByCipher[protocol]; ok {
 		if ex, ok := c[cipher]; ok {
 			if cid := uint16(ex.Group); cid != 0 { // we would have set the CurveID group in TLS v1.3 and above
-				curveID = fmt.Sprintf(" (Supported Group: %s)", SupportedGroups[cid])
+				curveID = fmt.Sprintf(" (Supported Group: %s)", tlsdefs.SupportedGroups[cid])
 			} else {
 				key := ex.Key
 				if len(key) > 4 && key[0] == 3 {
 					//Supported Group
 					cid := uint16(key[1])<<8 | uint16(key[2])
-					curveID = fmt.Sprintf(" (Supported Group: %s)", SupportedGroups[cid])
+					curveID = fmt.Sprintf(" (Supported Group: %s)", tlsdefs.SupportedGroups[cid])
 				}
 			}
 		}
 	}
-	return fmt.Sprintf("%s (0x%x) %s", CipherSuiteMap[cipher], cipher, curveID)
+	return fmt.Sprintf("%s (0x%x) %s", tlsdefs.CipherSuiteMap[cipher], cipher, curveID)
 }
 
 //ToStringStruct returns a string-decoded form of ScanResult
@@ -1017,11 +1019,11 @@ func (s ScanResult) ToStringStruct() (out HumanScanResult) {
 	out.Port = s.Port
 	out.SupportsTLS = s.SupportsTLS()
 	for _, p := range s.SupportedProtocols {
-		out.SupportedProtocols = append(out.SupportedProtocols, TLSVersionMap[p])
+		out.SupportedProtocols = append(out.SupportedProtocols, tlsdefs.TLSVersionMap[p])
 	}
 	out.HasCipherPreferenceOrderByProtocol = make(map[string]bool)
 	for p := range s.HasCipherPreferenceOrderByProtocol {
-		out.HasCipherPreferenceOrderByProtocol[TLSVersionMap[p]] = s.HasCipherPreferenceOrderByProtocol[p]
+		out.HasCipherPreferenceOrderByProtocol[tlsdefs.TLSVersionMap[p]] = s.HasCipherPreferenceOrderByProtocol[p]
 	}
 	out.CipherPreferenceOrderByProtocol = make(map[string][]string)
 	for k, v := range s.CipherPreferenceOrderByProtocol {
@@ -1031,26 +1033,26 @@ func (s ScanResult) ToStringStruct() (out HumanScanResult) {
 				ciphers = append(ciphers, fmt.Sprintf("%s,%s", getCurve(k, c, s), scoreCipher(c, k, s)))
 			}
 		}
-		out.CipherPreferenceOrderByProtocol[TLSVersionMap[k]] = ciphers
+		out.CipherPreferenceOrderByProtocol[tlsdefs.TLSVersionMap[k]] = ciphers
 	}
 	out.OcspStaplingByProtocol = make(map[string]bool)
 	for k, v := range s.OcspStaplingByProtocol {
-		out.OcspStaplingByProtocol[TLSVersionMap[k]] = v
+		out.OcspStaplingByProtocol[tlsdefs.TLSVersionMap[k]] = v
 	}
 
 	out.SelectedCipherByProtocol = make(map[string]string)
 	for k, v := range s.SelectedCipherByProtocol {
-		out.SelectedCipherByProtocol[TLSVersionMap[k]] = getCurve(k, v, s)
+		out.SelectedCipherByProtocol[tlsdefs.TLSVersionMap[k]] = getCurve(k, v, s)
 	}
 
 	out.ALPNByProtocol = make(map[string]string)
 	for k, v := range s.ALPNByProtocol {
-		out.ALPNByProtocol[TLSVersionMap[k]] = v
+		out.ALPNByProtocol[tlsdefs.TLSVersionMap[k]] = v
 	}
 
 	out.SecureRenegotiationSupportedByProtocol = make(map[string]bool)
 	for k, v := range s.SecureRenegotiationSupportedByProtocol {
-		out.SecureRenegotiationSupportedByProtocol[TLSVersionMap[k]] = v
+		out.SecureRenegotiationSupportedByProtocol[tlsdefs.TLSVersionMap[k]] = v
 	}
 
 	out.CipherSuiteByProtocol = make(map[string][]string)
@@ -1059,13 +1061,13 @@ func (s ScanResult) ToStringStruct() (out HumanScanResult) {
 		for _, c := range v {
 			ciphers = append(ciphers, fmt.Sprintf("%s,%s", getCurve(k, c, s), scoreCipher(c, k, s)))
 		}
-		out.CipherSuiteByProtocol[TLSVersionMap[k]] = ciphers
+		out.CipherSuiteByProtocol[tlsdefs.TLSVersionMap[k]] = ciphers
 	}
 
 	out.CertificatesPerProtocol = make(map[string][]HumanCertificate)
 	for p, c := range s.CertificatesPerProtocol {
 		certs, err := c.GetCertificates()
-		out.CertificatesPerProtocol[TLSVersionMap[p]] = []HumanCertificate{}
+		out.CertificatesPerProtocol[tlsdefs.TLSVersionMap[p]] = []HumanCertificate{}
 		if err != nil {
 			continue
 		}
@@ -1081,23 +1083,24 @@ func (s ScanResult) ToStringStruct() (out HumanScanResult) {
 			if o, ok := s.OcspStaplingByProtocol[p]; ok {
 				ocsp = o
 			}
-			out.CertificatesPerProtocol[TLSVersionMap[p]] = append(out.CertificatesPerProtocol[TLSVersionMap[p]],
-				HumanCertificate{
-					Subject:            cert.Subject.String(),
-					SubjectSerialNo:    cert.Subject.SerialNumber,
-					SubjectCN:          cert.Subject.CommonName,
-					SubjectAN:          strings.Join(cert.DNSNames, ", "),
-					SerialNumber:       cert.SerialNumber.String(),
-					Issuer:             cert.Issuer.String(),
-					PublicKeyAlgorithm: cert.PublicKeyAlgorithm.String(),
-					ValidFrom:          cert.NotBefore.String(),
-					ValidUntil:         cert.NotAfter.String(),
-					Key:                certKey,
-					SignatureAlgorithm: cert.SignatureAlgorithm.String(),
-					Signature:          sig,
-					OcspStapling:       ocsp,
-					RevocationDetail:   revokers(cert),
-				})
+			out.CertificatesPerProtocol[tlsdefs.TLSVersionMap[p]] =
+				append(out.CertificatesPerProtocol[tlsdefs.TLSVersionMap[p]],
+					HumanCertificate{
+						Subject:            cert.Subject.String(),
+						SubjectSerialNo:    cert.Subject.SerialNumber,
+						SubjectCN:          cert.Subject.CommonName,
+						SubjectAN:          strings.Join(cert.DNSNames, ", "),
+						SerialNumber:       cert.SerialNumber.String(),
+						Issuer:             cert.Issuer.String(),
+						PublicKeyAlgorithm: cert.PublicKeyAlgorithm.String(),
+						ValidFrom:          cert.NotBefore.String(),
+						ValidUntil:         cert.NotAfter.String(),
+						Key:                certKey,
+						SignatureAlgorithm: cert.SignatureAlgorithm.String(),
+						Signature:          sig,
+						OcspStapling:       ocsp,
+						RevocationDetail:   revokers(cert),
+					})
 
 		}
 	}
@@ -1160,7 +1163,7 @@ func (s ScanResult) ToString(config ScanConfig) (result string) {
 			if s.IsSTARTLS {
 				startTLS = " (STARTTLS)"
 			}
-			result += fmt.Sprintf("\t%s%s:\n", TLSVersionMap[tls], startTLS)
+			result += fmt.Sprintf("\t%s%s:\n", tlsdefs.TLSVersionMap[tls], startTLS)
 			tls13RenegotiationSupport := ""
 			if tls == cryptotls.VersionTLS13 {
 				tls13RenegotiationSupport = " (not applicable to TLS v1.3)" // see https://tools.ietf.org/html/rfc8446#section-4.1.2
@@ -1170,7 +1173,7 @@ func (s ScanResult) ToString(config ScanConfig) (result string) {
 			if !config.ProtocolsOnly {
 
 				result += fmt.Sprintf("\t\tHas a cipher preference order: %t\n", s.HasCipherPreferenceOrderByProtocol[tls])
-				result += fmt.Sprintf("\t\tSelected cipher when all client ciphers (in numerical order) are presented: %s\n", CipherSuiteMap[s.SelectedCipherByProtocol[tls]])
+				result += fmt.Sprintf("\t\tSelected cipher when all client ciphers (in numerical order) are presented: %s\n", tlsdefs.CipherSuiteMap[s.SelectedCipherByProtocol[tls]])
 				if s.HasCipherPreferenceOrderByProtocol[tls] {
 					result += "\t\tSupported Ciphersuites (in order of preference):\n"
 					for _, cipher := range s.CipherPreferenceOrderByProtocol[tls] {
@@ -1317,7 +1320,7 @@ func scoreCertificate(score *SecurityScore, scan *ScanResult) {
 
 func scoreProtocol(protocol uint16) (score int) {
 	switch protocol {
-	case VersionSSL20:
+	case tlsdefs.VersionSSL20:
 		score = 0
 	case tls.VersionSSL30:
 		score = 80
@@ -1327,7 +1330,7 @@ func scoreProtocol(protocol uint16) (score int) {
 		score = 85 // pegged down from 95
 	case tls.VersionTLS12:
 		score = 100
-	case VersionTLS13:
+	case tls.VersionTLS13:
 		score = 100
 	}
 	return
@@ -1510,7 +1513,7 @@ func supportsAnonAuth(scan ScanResult) bool {
 //check for Authenticate Encryption with Associated Data (AEAD) support
 func supportsAEAD(scan ScanResult) bool {
 	aead := false
-	for _, aeP := range AEADProtocols {
+	for _, aeP := range tlsdefs.AEADProtocols {
 		for _, p := range scan.SupportedProtocols {
 			if p == aeP {
 				var ciphers []uint16

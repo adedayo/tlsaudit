@@ -8,6 +8,8 @@ github.com/adedayo/cidr v0.1.4/go.mod h1:By6g82fmUcv8/Z/6JcDs1D4wO4gc/Ookb842bVC
 github.com/adedayo/tcpscan v0.3.4/go.mod h1:V4BbfuzhchhRXT/uyJiNxysE4nadq2t6kfXdFJkXQ2k=
 github.com/adedayo/tcpscan v0.5.6 h1:EzNBxn2nIJ5WzuAFb5tmxUGX83Yc0Xg6YN1hn3bLMao=
 github.com/adedayo/tcpscan v0.5.6/go.mod h1:6v2onzEsetkP35RqQnKhB5B5MLVV1w+eepgCkXWQzwc=
+github.com/adedayo/tls-definitions v0.0.1 h1:RklSTUeBn5DD/jDsps44eR2e3mbQRYR+a7YrtmKwal4=
+github.com/adedayo/tls-definitions v0.0.1/go.mod h1:gMvNG/ngGUR7D56FeXy6hvkheV95CuTPiv7OfZCWHCM=
 github.com/adedayo/tls-stats v0.0.0-20190603172217-4329b2334087 h1:ZyMM6lZbEeZzL1gkYqAKTAbDdgiq9Hj3Ot536uWO4ps=
 github.com/adedayo/tls-stats v0.0.0-20190603172217-4329b2334087/go.mod h1:d+kU3FzEvIVYOie4QRBqApp3Ywz8qbNQShGVJwTU818=
 github.com/adedayo/tls-stats v0.0.1 h1:NJDv78JRJtG3uGW1dV3fmDNfrxD5p+pV2PGfZUeaN+M=

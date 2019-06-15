@@ -32,6 +32,7 @@ package cmd
 import (
 	"fmt"
 
+	tlsdefs "github.com/adedayo/tls-definitions"
 	tlsmodel "github.com/adedayo/tlsaudit/pkg/model"
 	"github.com/spf13/cobra"
 )
@@ -48,8 +49,8 @@ func init() {
 }
 
 func processCipherCommand(cmd *cobra.Command, args []string) {
-	for c := range tlsmodel.CipherSuiteMap {
+	for c := range tlsdefs.CipherSuiteMap {
 		cc, _ := tlsmodel.GetCipherConfig(c)
-		fmt.Printf("%d, %d, %#v\n", cc.GetEncryptionKeyLength(), cc.GetKeyExchangeKeyLength(c, tlsmodel.TLSVersions[2], tlsmodel.ScanResult{}), cc)
+		fmt.Printf("%d, %d, %#v\n", cc.GetEncryptionKeyLength(), cc.GetKeyExchangeKeyLength(c, tlsdefs.TLSVersions[2], tlsmodel.ScanResult{}), cc)
 	}
 }

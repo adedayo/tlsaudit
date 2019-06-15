@@ -8,6 +8,7 @@ package gotls
 
 import (
 	"bytes"
+	"crypto/tls"
 	"errors"
 	"fmt"
 
@@ -144,7 +145,7 @@ func processTLS13Handshake(hs *clientHandshakeStateTLS13) error {
 func (c *Conn) ReadServerKeyExchange(clientHello *clientHelloMsg, sHello *tlsmodel.ServerHelloMessage, ecdheParams ecdheParameters) (tlsmodel.ServerKeyExchangeMsg, error) {
 
 	keyExchangeMsg := tlsmodel.ServerKeyExchangeMsg{}
-	if c.vers == tlsmodel.VersionTLS13 {
+	if c.vers == tls.VersionTLS13 {
 		if serverHello, ok := sHello.RawHello.(*serverHelloMsg); ok {
 			sharedKey := ecdheParams.SharedKey(serverHello.serverShare.data)
 			if sharedKey == nil {

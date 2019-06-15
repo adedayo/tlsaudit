@@ -41,6 +41,7 @@ import (
 
 	"github.com/adedayo/cidr"
 
+	tlsdefs "github.com/adedayo/tls-definitions"
 	tlsaudit "github.com/adedayo/tlsaudit/pkg"
 	tlsmodel "github.com/adedayo/tlsaudit/pkg/model"
 	"github.com/spf13/cobra"
@@ -294,7 +295,7 @@ func generateResultText(r tlsmodel.ScanResult, currentServerInput string) (resul
 	if r.SupportsTLS() {
 		supported := []string{}
 		for _, p := range r.SupportedProtocols {
-			supported = append(supported, tlsmodel.TLSVersionMap[p])
+			supported = append(supported, tlsdefs.TLSVersionMap[p])
 		}
 		protocols = strings.Join(supported, ", ")
 	}
@@ -309,7 +310,7 @@ func generateResultText(r tlsmodel.ScanResult, currentServerInput string) (resul
 			ciphers = r.CipherPreferenceOrderByProtocol[p]
 		}
 		for _, c := range ciphers {
-			result += fmt.Sprintf(format3, tlsmodel.TLSVersionMap[p], "", tlsmodel.CipherSuiteMap[c])
+			result += fmt.Sprintf(format3, tlsdefs.TLSVersionMap[p], "", tlsdefs.CipherSuiteMap[c])
 		}
 	}
 	return

@@ -12,6 +12,7 @@ import (
 
 	cidrlib "github.com/adedayo/cidr"
 	portscan "github.com/adedayo/tcpscan"
+	tlsdefs "github.com/adedayo/tls-definitions"
 	gotls "github.com/adedayo/tlsaudit/pkg/golang"
 	tlsmodel "github.com/adedayo/tlsaudit/pkg/model"
 )
@@ -219,7 +220,7 @@ func getTLSConfig(tlsVersion uint16) *gotls.Config {
 		PreferServerCipherSuites: true,
 		MinVersion:               tlsVersion,
 		MaxVersion:               tlsVersion,
-		NextProtos:               tlsmodel.AllALPNProtos,
+		NextProtos:               tlsdefs.AllALPNProtos,
 	}
 
 }
@@ -249,10 +250,10 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 
 		handshakeChannels := []<-chan ServerHelloAndCert{}
 		//check for protocol support with all ciphersuites present
-		for _, tlsVersion := range tlsmodel.TLSVersions {
+		for _, tlsVersion := range tlsdefs.TLSVersions {
 			hsc := func(versionOfTLS uint16) <-chan ServerHelloAndCert {
 				config := getTLSConfig(versionOfTLS)
-				config.CipherSuites = tlsmodel.AllCipherSuites
+				config.CipherSuites = tlsdefs.AllCipherSuites
 				if serverName != "" {
 					config.ServerName = serverName
 				}
@@ -288,7 +289,7 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 			//now test each cipher for only the supported protocols
 			outChannels := []<-chan tlsmodel.HelloAndKey{}
 			for _, tlsVersion := range result.SupportedProtocols {
-				for _, cipher := range tlsmodel.AllCipherSuites {
+				for _, cipher := range tlsdefs.AllCipherSuites {
 					out := testConnection(hostnameWithPort, tlsVersion, cipher, result.IsSTARTLS, serverName)
 					outChannels = append(outChannels, out)
 				}
@@ -416,7 +417,7 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 }
 
 func checkFallbackSCSVSupport(result *tlsmodel.ScanResult, hostnameWithPort, serverName string, patientTimeout time.Duration) {
-	maxProtocol := tlsmodel.VersionSSL20
+	maxProtocol := tlsdefs.VersionSSL20
 	if len(result.SupportedProtocols) > 0 {
 		switch result.SupportedProtocols[0] {
 		case tls.VersionTLS13:
@@ -428,7 +429,7 @@ func checkFallbackSCSVSupport(result *tlsmodel.ScanResult, hostnameWithPort, ser
 		case tls.VersionTLS10:
 			maxProtocol = tls.VersionSSL30
 		default:
-			maxProtocol = tlsmodel.VersionSSL20
+			maxProtocol = tlsdefs.VersionSSL20
 		}
 
 		ciphers := []uint16{}
