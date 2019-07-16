@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	tlsdefs "github.com/adedayo/tls-definitions"
 )
 
 type args struct {
@@ -79,7 +81,7 @@ type parseError struct {
 }
 
 func enumerateCipherParseErrors() (data []parseError) {
-	for c, cn := range CipherSuiteMap {
+	for c, cn := range tlsdefs.CipherSuiteMap {
 		_, err := GetCipherConfig(c)
 		data = append(data, parseError{
 			cipher: cn,
@@ -146,7 +148,7 @@ func TestScanResult_SupportsTLS(t *testing.T) {
 }
 
 func TestScanResult_IsExportable(t *testing.T) {
-	for cipher, cipherName := range CipherSuiteMap {
+	for cipher, cipherName := range tlsdefs.CipherSuiteMap {
 		t.Run(cipherName, func(t *testing.T) {
 			if strings.Contains(strings.Split(cipherName, "_WITH_")[0], "EXPORT") {
 				if cc, _ := GetCipherConfig(cipher); !cc.IsExport {
@@ -158,7 +160,7 @@ func TestScanResult_IsExportable(t *testing.T) {
 }
 
 func TestScanResult_GetEncryptionKeyLength(t *testing.T) {
-	for cipher, cipherName := range CipherSuiteMap {
+	for cipher, cipherName := range tlsdefs.CipherSuiteMap {
 		t.Run(cipherName, func(t *testing.T) {
 			if cc, _ := GetCipherConfig(cipher); cc.GetEncryptionKeyLength() == -1 {
 				t.Errorf("CipherConfig.GetEncryptionKeyLength() = -1, when cipher is %s", cc.Encryption)
@@ -179,10 +181,10 @@ func TestEnumerateCipherMetrics_EnsureMacPRFIsSet(t *testing.T) {
 
 func TestKeyExchangePerformance(t *testing.T) {
 	conf := CipherConfigParameters{
-		RSABitLength:       1024,
-		NamedCurveStrength: 1024,
+		RSABitLength:           1024,
+		SupportedGroupStrength: 1024,
 	}
-	for cipher, cipherName := range CipherSuiteMap {
+	for cipher, cipherName := range tlsdefs.CipherSuiteMap {
 		t.Run(cipherName, func(t *testing.T) {
 			if cc, _ := GetCipherConfig(cipher); cc.getKXPerf(conf) == -1 {
 				t.Errorf("Key exchange performance = -1, when key exchange is %s", cc.KeyExchange)
@@ -192,7 +194,7 @@ func TestKeyExchangePerformance(t *testing.T) {
 }
 
 func TestAuthenticationPerformance(t *testing.T) {
-	for cipher, cipherName := range CipherSuiteMap {
+	for cipher, cipherName := range tlsdefs.CipherSuiteMap {
 		t.Run(cipherName, func(t *testing.T) {
 			if cc, _ := GetCipherConfig(cipher); cc.getAuthPerf() == -1 {
 				t.Errorf("Authentication performance = -1, when authentication is %s", cc.Authentication)
@@ -202,7 +204,7 @@ func TestAuthenticationPerformance(t *testing.T) {
 }
 
 func TestMACPRFPerformance(t *testing.T) {
-	for cipher, cipherName := range CipherSuiteMap {
+	for cipher, cipherName := range tlsdefs.CipherSuiteMap {
 		t.Run(cipherName, func(t *testing.T) {
 			if cc, _ := GetCipherConfig(cipher); cc.getMACPRFPerf() == -1 {
 				t.Errorf("MACPRF performance = -1, when MACPRF is %s", cc.MACPRF)
@@ -212,7 +214,7 @@ func TestMACPRFPerformance(t *testing.T) {
 }
 
 func TestEncryptionAlgorithmPerformance(t *testing.T) {
-	for cipher, cipherName := range CipherSuiteMap {
+	for cipher, cipherName := range tlsdefs.CipherSuiteMap {
 		t.Run(cipherName, func(t *testing.T) {
 			if cc, _ := GetCipherConfig(cipher); cc.getEncAlgPerf() == -1 {
 				t.Errorf("Encryption Algorithm performance = -1, when Encryption Algorithm is %s", cc.getEncAlg())
@@ -222,7 +224,7 @@ func TestEncryptionAlgorithmPerformance(t *testing.T) {
 }
 
 func TestEncryptionKeyPerformance(t *testing.T) {
-	for cipher, cipherName := range CipherSuiteMap {
+	for cipher, cipherName := range tlsdefs.CipherSuiteMap {
 		t.Run(cipherName, func(t *testing.T) {
 			if cc, _ := GetCipherConfig(cipher); cc.getEncKeyPerf() == -1 {
 				t.Errorf("Encryption Key performance = -1, when Encryption Key is %d", cc.GetEncryptionKeyLength())
@@ -232,7 +234,7 @@ func TestEncryptionKeyPerformance(t *testing.T) {
 }
 
 func TestEncryptionModePerformance(t *testing.T) {
-	for cipher, cipherName := range CipherSuiteMap {
+	for cipher, cipherName := range tlsdefs.CipherSuiteMap {
 		t.Run(cipherName, func(t *testing.T) {
 			if cc, _ := GetCipherConfig(cipher); cc.getEncModePerf() == -1 {
 				t.Errorf("Encryption Mode performance = -1, when encryption mode is %s", cc.getEncMode())
@@ -243,10 +245,10 @@ func TestEncryptionModePerformance(t *testing.T) {
 
 func TestCalculateCypherPerformance(t *testing.T) {
 	conf := CipherConfigParameters{
-		RSABitLength:       1024,
-		NamedCurveStrength: 1024,
+		RSABitLength:           1024,
+		SupportedGroupStrength: 1024,
 	}
-	for cipher, cipherName := range CipherSuiteMap {
+	for cipher, cipherName := range tlsdefs.CipherSuiteMap {
 		t.Run(cipherName, func(t *testing.T) {
 			if cc, _ := GetCipherConfig(cipher); cc.getPerformanceMetric(conf) >= 0 {
 				t.Errorf("Cypher suite performance < 0, with value %d", cc.getPerformanceMetric(conf))
