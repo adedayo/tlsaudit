@@ -1,4 +1,7 @@
 [![Build Status](https://travis-ci.org/adedayo/tlsaudit.svg?branch=master)](https://travis-ci.org/adedayo/tlsaudit)
+[![Go Report Card](https://goreportcard.com/badge/github.com/adedayo/tlsaudit)](https://goreportcard.com/report/github.com/adedayo/tlsaudit)
+![GitHub release](https://img.shields.io/github/release/adedayo/tlsaudit.svg)
+[![GitHub license](https://img.shields.io/github/license/adedayo/tlsaudit.svg)](https://github.com/adedayo/tlsaudit/blob/master/LICENSE)
 
 # TLSAudit 
 TLSAudit is a utility for auditing TLS (including SSL and STARTTLS) security settings. You can use it to enumerate protocols, ciphers and curves supported by an open TCP port. Scan entire CIDR ranges with TLSAudit to discover which ports are open and get details of the TLS configurations of the open ports. You can scan specific port ranges within CIDR ranges too, by using a format such as `tlsaudit 10.10.5.0:443/24`, which scans the entire CIDR range `10.10.5.0/24` but looking only at port `443`. 
@@ -39,8 +42,10 @@ tlsaudit 8.8.8.8/32 10.10.10.1/30
 tlsaudit --timeout=10 8.8.8.8:443/32
 
 Flags:
+      --api int                                             run as an API service on the specified port (default 12345)
   -h, --help                                                help for tlsaudit
   -c, --hide-certs                                          suppress certificate information in output (default: false)
+      --hide-no-tls                                         suppress the display of ports with no TLS support in output. Note that non-open ports will be shown as not supporting TLS when ports are explicitly specified in the host to audit, bypassing host port scan, which makes this flag particularly useful (default: false)
   -i, --input string[="tlsaudit_input.txt"]                 read the CIDR range, IPs and domains to scan from an input FILE separated by commas, or newlines (default "tlsaudit_input.txt")
   -j, --json                                                generate JSON output
   -o, --output string[="tlsaudit.txt"]                      write results into an output FILE (default "tlsaudit.txt")
@@ -48,6 +53,7 @@ Flags:
   -q, --quiet                                               control whether to produce a running commentary of progress or stay quiet till the end (default: false)
   -r, --rate int                                            the rate (in packets per second) that we should use to scan for open ports (default 1000)
   -s, --service string[="data/config/TLSAuditConfig.yml"]   run tlsaudit as a service (default "data/config/TLSAuditConfig.yml")
+  -m, --show-cipher-metrics                                 enumerate all ciphers and show associated security and performance metrics (default: false)
   -t, --timeout int                                         TIMEOUT (in seconds) to adjust how much we are willing to wait for servers to come back with responses. Smaller timeout sacrifices accuracy for speed (default 5)
       --version                                             version for tlsaudit
 ```
