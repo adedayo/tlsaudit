@@ -47,12 +47,12 @@ func HandShakeUpToKeyExchange(hostname string, config *gotls.Config, startTLS bo
 		return hk, err
 	}
 
-	serverHello, err = c.ReadServerHello()
+	serverHello, rawHello, err := c.ReadServerHello()
 	if err != nil {
 		return hk, err
 	}
 
-	k, err := c.ReadServerKeyExchange(hello, &serverHello, ecdheParameters)
+	k, err := c.ReadServerKeyExchange(hello, &serverHello, rawHello, ecdheParameters)
 
 	if err != nil {
 		return tlsmodel.HelloAndKey{Hello: serverHello, Key: k, HasKey: false}, err
@@ -102,7 +102,7 @@ func HandShakeClientHello(hostname string, config *gotls.Config, startTLS bool, 
 		return serverHello, err
 	}
 
-	serverHello, err = c.ReadServerHello()
+	serverHello, _, err = c.ReadServerHello()
 	return serverHello, err
 }
 
@@ -133,8 +133,8 @@ func HandShakeClientHelloGetServerCert(hostname string, config *gotls.Config, ti
 			hs <- ServerHelloAndCert{ServerHello: serverHello, Cert: certs, Err: err}
 			return
 		}
-
-		serverHello, err = c.ReadServerHello()
+		var rawHello interface{}
+		serverHello, rawHello, err = c.ReadServerHello()
 		startTLS := false
 		if err != nil {
 			//If ServerHello fails, check STARTTLS
@@ -163,14 +163,14 @@ func HandShakeClientHelloGetServerCert(hostname string, config *gotls.Config, ti
 				return
 			}
 
-			serverHello, err = c.ReadServerHello()
+			serverHello, rawHello, err = c.ReadServerHello()
 			if err != nil {
 				hs <- ServerHelloAndCert{ServerHello: serverHello, Cert: certs, Err: err}
 				return
 			}
 			startTLS = true
 		}
-		certs, err = c.ReadServerCertificate(clientHello, &serverHello, ecdheParameters)
+		certs, err = c.ReadServerCertificate(clientHello, &serverHello, rawHello, ecdheParameters)
 		hs <- ServerHelloAndCert{ServerHello: serverHello, StartTLS: startTLS, Cert: certs, Err: err}
 		return
 	}()

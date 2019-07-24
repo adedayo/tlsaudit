@@ -459,7 +459,7 @@ func checkFallbackSCSVSupport(result *tlsmodel.ScanResult, hostnameWithPort, ser
 			return
 		}
 
-		if _, err := c.ReadServerHello(); err != nil {
+		if _, _, err := c.ReadServerHello(); err != nil {
 			if strings.Contains(err.Error(), "inappropriate fallback") {
 				result.SupportsTLSFallbackSCSV = true
 			}

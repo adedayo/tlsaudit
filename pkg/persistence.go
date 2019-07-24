@@ -2,6 +2,7 @@ package tlsaudit
 
 import (
 	"bytes"
+	"crypto/rsa"
 	"encoding/gob"
 	"fmt"
 	"io/ioutil"
@@ -119,10 +120,8 @@ func humanise(in []tlsmodel.ScanResult) (out []tlsmodel.HumanScanResult) {
 //StreamExistingResult sends data via a callback function
 func streamExistingResult(psr tlsmodel.PersistedScanRequest,
 	callback func(progress int, result []tlsmodel.ScanResult, narrative string)) {
-	opts := badger.DefaultOptions
 	dbDir := filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
-	opts.Dir = dbDir
-	opts.ValueDir = dbDir
+	opts := badger.DefaultOptions(dbDir)
 	opts.ReadOnly = true
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -171,10 +170,8 @@ func streamExistingResult(psr tlsmodel.PersistedScanRequest,
 
 //PersistScans persists the result of scans per server
 func PersistScans(psr tlsmodel.PersistedScanRequest, server string, scans []tlsmodel.ScanResult) {
-	opts := badger.DefaultOptions
 	dbDir := filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
-	opts.Dir = dbDir
-	opts.ValueDir = dbDir
+	opts := badger.DefaultOptions(dbDir)
 	opts.NumVersionsToKeep = 0
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -301,9 +298,7 @@ func LoadScanRequest(dir, scanID string) (psr tlsmodel.PersistedScanRequest, e e
 	}
 	lock.Unlock()
 	dbDir := filepath.Join(baseScanDBDirectory, dir, scanID, "request")
-	opts := badger.DefaultOptions
-	opts.Dir = dbDir
-	opts.ValueDir = dbDir
+	opts := badger.DefaultOptions(dbDir)
 	opts.ReadOnly = true
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -338,6 +333,7 @@ func LoadScanRequest(dir, scanID string) (psr tlsmodel.PersistedScanRequest, e e
 //arshallScanResults marshalls scan results
 func marshallScanResults(s []tlsmodel.ScanResult) []byte {
 	result := bytes.Buffer{}
+	gob.Register(rsa.PublicKey{}) // there is an indirect reference to it,
 	gob.Register([]tlsmodel.ScanResult{})
 	err := gob.NewEncoder(&result).Encode(&s)
 	if err != nil {
@@ -348,10 +344,8 @@ func marshallScanResults(s []tlsmodel.ScanResult) []byte {
 
 //PersistScanRequest persists scan request
 func PersistScanRequest(psr tlsmodel.PersistedScanRequest) {
-	opts := badger.DefaultOptions
 	dbDir := filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID, "request")
-	opts.Dir = dbDir
-	opts.ValueDir = dbDir
+	opts := badger.DefaultOptions(dbDir)
 	opts.NumVersionsToKeep = 0
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -363,63 +357,7 @@ func PersistScanRequest(psr tlsmodel.PersistedScanRequest) {
 	db.Update(func(txn *badger.Txn) error {
 		return txn.Set([]byte(psr.Request.ScanID), psr.Marshall())
 	})
-
-	// if psr.Progress%10 == 0 { //compact DB every 10 run
-	// 	lsmx, vlogx := db.Size()
-	// 	for db.RunValueLogGC(.8) == nil {
-	// 		lsmy, vlogy := db.Size()
-	// 		println("Compacted DB")
-	// 		fmt.Printf("Before LSM: %d, VLOG: %d, After LSM: %d, VLOG: %d\n", lsmx, vlogx, lsmy, vlogy)
-	// 		lsmx, vlogx = lsmy, vlogy
-	// 	}
-	// }
 }
-
-//CompactDB reclaims space by pruning the database
-// func CompactDB(dayPath, scanID string) {
-
-// 	//compact the scan requests
-// 	opts := badger.DefaultOptions
-// 	dbDir := filepath.Join(baseScanDBDirectory, dayPath, scanID, "request")
-// 	opts.Dir = dbDir
-// 	opts.ValueDir = dbDir
-// 	opts.NumVersionsToKeep = 0
-// 	db, err := badger.Open(opts)
-// 	if err != nil {
-// 		println(err.Error())
-// 		log.Fatal(err)
-// 		return
-// 	}
-// 	lsmx, vlogx := db.Size()
-// 	for db.RunValueLogGC(.8) == nil {
-// 		lsmy, vlogy := db.Size()
-// 		println("Compacted DB", opts.Dir)
-// 		fmt.Printf("Before LSM: %d, VLOG: %d, After LSM: %d, VLOG: %d\n", lsmx, vlogx, lsmy, vlogy)
-// 		lsmx, vlogx = lsmy, vlogy
-// 	}
-// 	db.Close()
-
-// 	//compact the scan results
-// 	dbDir = filepath.Join(baseScanDBDirectory, dayPath, scanID)
-// 	opts.Dir = dbDir
-// 	opts.ValueDir = dbDir
-// 	db, err = badger.Open(opts)
-// 	if err != nil {
-// 		println(err.Error())
-
-// 		log.Fatal(err)
-// 		return
-// 	}
-// 	lsmx, vlogx = db.Size()
-// 	for db.RunValueLogGC(.8) == nil {
-// 		lsmy, vlogy := db.Size()
-// 		println("Compacted DB", opts.Dir)
-// 		fmt.Printf("Before LSM: %d, VLOG: %d, After LSM: %d, VLOG: %d\n", lsmx, vlogx, lsmy, vlogy)
-// 		lsmx, vlogx = lsmy, vlogy
-// 	}
-// 	db.Close()
-
-// }
 
 //getNextScanID returns the next unique scan ID
 func getNextScanID() string {

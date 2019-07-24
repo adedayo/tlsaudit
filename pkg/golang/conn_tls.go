@@ -28,29 +28,29 @@ func (c *Conn) WriteRecord(typ recordType, data []byte) (int, error) {
 
 //ReadServerHello does exactly what it says
 //--introduced by dayo
-func (c *Conn) ReadServerHello() (tlsmodel.ServerHelloMessage, error) {
+func (c *Conn) ReadServerHello() (tlsmodel.ServerHelloMessage, interface{}, error) {
 	message := tlsmodel.ServerHelloMessage{}
 	msg, err := c.readHandshake()
 	if err != nil {
-		return message, err
+		return message, nil, err
 	}
 	if srvHello, ok := msg.(*serverHelloMsg); ok {
 		serverHello := srvHello.Export()
 		if err := c.pickTLSVersion(srvHello); err == nil {
 			serverHello.Vers = c.vers //need to overwrite as the server hello message version for TLS 1.3 is actually that for TLS 1.2
 		}
-		return serverHello, nil
+		return serverHello, srvHello, nil
 	}
-	return message, fmt.Errorf("Expecting a server hello message but got %#v", msg)
+	return message, nil, fmt.Errorf("Expecting a server hello message but got %#v", msg)
 }
 
 //ReadServerCertificate does exactly what it says
 //--introduced by dayo
-func (c *Conn) ReadServerCertificate(clientHello *clientHelloMsg, sHello *tlsmodel.ServerHelloMessage, ecdheParams ecdheParameters) (tlsmodel.CertificateMessage, error) {
+func (c *Conn) ReadServerCertificate(clientHello *clientHelloMsg, sHello *tlsmodel.ServerHelloMessage, rawHello interface{}, ecdheParams ecdheParameters) (tlsmodel.CertificateMessage, error) {
 	certMessage := tlsmodel.CertificateMessage{}
 
 	if c.vers == VersionTLS13 {
-		if serverHello, ok := sHello.RawHello.(*serverHelloMsg); ok {
+		if serverHello, ok := rawHello.(*serverHelloMsg); ok {
 			hs := &clientHandshakeStateTLS13{
 				c:           c,
 				serverHello: serverHello,
@@ -142,11 +142,11 @@ func processTLS13Handshake(hs *clientHandshakeStateTLS13) error {
 
 //ReadServerKeyExchange does exactly what it says - skips certificate/certificate status messages
 //--introduced by dayo
-func (c *Conn) ReadServerKeyExchange(clientHello *clientHelloMsg, sHello *tlsmodel.ServerHelloMessage, ecdheParams ecdheParameters) (tlsmodel.ServerKeyExchangeMsg, error) {
+func (c *Conn) ReadServerKeyExchange(clientHello *clientHelloMsg, sHello *tlsmodel.ServerHelloMessage, rawHello interface{}, ecdheParams ecdheParameters) (tlsmodel.ServerKeyExchangeMsg, error) {
 
 	keyExchangeMsg := tlsmodel.ServerKeyExchangeMsg{}
 	if c.vers == tls.VersionTLS13 {
-		if serverHello, ok := sHello.RawHello.(*serverHelloMsg); ok {
+		if serverHello, ok := rawHello.(*serverHelloMsg); ok {
 			sharedKey := ecdheParams.SharedKey(serverHello.serverShare.data)
 			if sharedKey == nil {
 				return keyExchangeMsg, errors.New("tls: invalid TLS v1.3 server key share")

@@ -857,8 +857,6 @@ type ServerHelloMessage struct {
 	// HelloRetryRequest extensions
 	cookie        []byte
 	selectedGroup CurveID
-
-	RawHello interface{}
 }
 
 // CurveID is the type of a TLS identifier for an elliptic curve. See
