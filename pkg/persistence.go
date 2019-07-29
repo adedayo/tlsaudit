@@ -29,7 +29,25 @@ var (
 	latestTLSAuditSnapshot = make(map[time.Time]tlsmodel.TLSAuditSnapshotHuman)
 	lock                   = sync.RWMutex{}
 	scanCacheLock          = sync.RWMutex{}
+	myLogger               = logger{}
 )
+
+type logger struct {
+}
+
+func (log logger) Errorf(format string, params ...interface{}) {
+	fmt.Printf(format, params...)
+}
+
+func (log logger) Warningf(format string, params ...interface{}) {
+	fmt.Printf(format, params...)
+
+}
+func (log logger) Infof(format string, params ...interface{}) {
+}
+
+func (log logger) Debugf(format string, params ...interface{}) {
+}
 
 func init() {
 	if dir, err := homedir.Expand("~/.tlsaudit"); err == nil {
@@ -122,6 +140,7 @@ func streamExistingResult(psr tlsmodel.PersistedScanRequest,
 	callback func(progress int, result []tlsmodel.ScanResult, narrative string)) {
 	dbDir := filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
 	opts := badger.DefaultOptions(dbDir)
+	opts.Logger = myLogger
 	opts.ReadOnly = true
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -172,6 +191,7 @@ func streamExistingResult(psr tlsmodel.PersistedScanRequest,
 func PersistScans(psr tlsmodel.PersistedScanRequest, server string, scans []tlsmodel.ScanResult) {
 	dbDir := filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
 	opts := badger.DefaultOptions(dbDir)
+	opts.Logger = myLogger
 	opts.NumVersionsToKeep = 0
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -299,6 +319,7 @@ func LoadScanRequest(dir, scanID string) (psr tlsmodel.PersistedScanRequest, e e
 	lock.Unlock()
 	dbDir := filepath.Join(baseScanDBDirectory, dir, scanID, "request")
 	opts := badger.DefaultOptions(dbDir)
+	opts.Logger = myLogger
 	opts.ReadOnly = true
 	db, err := badger.Open(opts)
 	if err != nil {
@@ -346,6 +367,7 @@ func marshallScanResults(s []tlsmodel.ScanResult) []byte {
 func PersistScanRequest(psr tlsmodel.PersistedScanRequest) {
 	dbDir := filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID, "request")
 	opts := badger.DefaultOptions(dbDir)
+	opts.Logger = myLogger
 	opts.NumVersionsToKeep = 0
 	db, err := badger.Open(opts)
 	if err != nil {

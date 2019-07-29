@@ -39,13 +39,14 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 			os.Exit(1)
 		}
 	}()
+
+	originalDomain := strings.Split(strings.Split(cidr, ":")[0], "/")[0]
 	go func() {
 		defer close(scanResults)
 		scan := make(map[string]portscan.PortACK)
 		resultChannels := []<-chan tlsmodel.ScanResult{}
 		var result <-chan portscan.PortACK
 		if strings.Count(cidr, ":") == 1 {
-			// cidrlib.extractPorts(cidr)
 			result = generateFakeACKs(cidr)
 
 		} else {
@@ -64,33 +65,22 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 			out := make(chan bool)
 			go func() {
 				defer close(out)
-				hostnames := make(map[string]string)
 				for ack := range result {
-					// fmt.Printf("Got %s ACK %#v\n", ack.Status(), ack)
 					if ack.IsOpen() {
 						port := strings.Split(ack.Port, "(")[0]
 						key := ack.Host + ack.Port
-						domain := ""
-						if _, present := hostnames[ack.Host]; !present {
-							cname, err := net.LookupCNAME(ack.Host)
-							if err == nil {
-								domain = cname
-							}
-							hostnames[ack.Host] = domain
-						} else {
-							domain = hostnames[ack.Host]
-						}
 						if _, present := scan[key]; !present {
 							scan[key] = ack
 							channel := scanHost(tlsmodel.HostAndPort{
 								Hostname: ack.Host,
 								Port:     port,
-							}, config, domain)
+							}, config, originalDomain)
 							resultChannels = append(resultChannels, channel)
 						}
 					}
 				}
 				for res := range MergeResultChannels(resultChannels...) {
+					res.HostName = originalDomain
 					scanResults <- res
 				}
 			}()

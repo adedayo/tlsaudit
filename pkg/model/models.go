@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -913,7 +912,8 @@ func (cert *CertificateMessage) GetCertificates() (certs []*x509.Certificate, e 
 
 // ScanResult is the scan result of a server TLS settings
 type ScanResult struct {
-	Server                                 string
+	Server                                 string //IP address
+	HostName                               string
 	Port                                   string
 	SupportedProtocols                     []uint16
 	HasCipherPreferenceOrderByProtocol     map[uint16]bool
@@ -1010,10 +1010,7 @@ func getCurve(protocol, cipher uint16, scan ScanResult) string {
 func (s ScanResult) ToStringStruct() (out HumanScanResult) {
 	out.GroupID = s.GroupID
 	out.Server = s.Server
-	ip, err := net.LookupAddr(s.Server)
-	if err == nil {
-		out.HostName = strings.Join(ip, ", ")
-	}
+	out.HostName = s.HostName
 	out.Port = s.Port
 	out.SupportsTLS = s.SupportsTLS()
 	for _, p := range s.SupportedProtocols {
@@ -1142,11 +1139,7 @@ func (s ScanResult) SupportsTLS() bool {
 
 //ToString generates a string output
 func (s ScanResult) ToString(config ScanConfig) (result string) {
-	hn, err := net.LookupAddr(s.Server)
-	hostname := s.Server
-	if err == nil {
-		hostname = strings.Join(hn, ",")
-	}
+	hostname := s.HostName
 	result += fmt.Sprintf("%s (%s)\n\tPort: %s\n", s.Server, hostname, s.Port)
 	if len(s.SupportedProtocols) == 0 {
 		if config.HideNoTLS {

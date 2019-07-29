@@ -8,7 +8,8 @@ require (
 	github.com/adedayo/tls-definitions v0.0.2
 	github.com/adedayo/tls-stats v0.0.1 // indirect
 	github.com/carlescere/scheduler v0.0.0-20170109141437-ee74d2f83d82
-	github.com/dgraph-io/badger v1.6.0
+	github.com/dgraph-io/badger v2.0.0-rc2+incompatible
+	github.com/golang/protobuf v1.3.2 // indirect
 	github.com/gorilla/handlers v1.4.0
 	github.com/gorilla/mux v1.7.0
 	github.com/gorilla/websocket v1.4.0

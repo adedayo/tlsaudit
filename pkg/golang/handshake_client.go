@@ -138,7 +138,6 @@ NextCipherSuite:
 }
 
 func (c *Conn) clientHandshake() (err error) {
-	println("Called client handshake")
 	if c.config == nil {
 		c.config = defaultConfig()
 	}
@@ -155,10 +154,8 @@ func (c *Conn) clientHandshake() (err error) {
 		println(err.Error())
 		return err
 	}
-	println("Got here 0", hello, ecdheParams, err)
 
 	cacheKey, session, earlySecret, binderKey := c.loadSession(hello)
-	println("Loadsession", cacheKey, session, earlySecret, binderKey)
 	if cacheKey != "" && session != nil {
 		defer func() {
 			// If we got a handshake failure when resuming a session, throw away
@@ -172,8 +169,6 @@ func (c *Conn) clientHandshake() (err error) {
 			}
 		}()
 	}
-
-	println("Got here 1")
 
 	if _, err := c.writeRecord(recordTypeHandshake, hello.marshal()); err != nil {
 		return err
@@ -194,10 +189,7 @@ func (c *Conn) clientHandshake() (err error) {
 		return err
 	}
 
-	println("Picked TLS version", c.vers, VersionTLS13)
-
 	if c.vers == VersionTLS13 {
-		println("This is TLS v3 -----------XXX_------X______Xxxx-----")
 		hs := &clientHandshakeStateTLS13{
 			c:           c,
 			serverHello: serverHello,

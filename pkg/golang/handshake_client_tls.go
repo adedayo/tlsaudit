@@ -49,6 +49,7 @@ func MakeClientHello(config *Config) (*clientHelloMsg, ecdheParameters, error) {
 		clientHelloVersion = VersionTLS12
 	}
 
+	// ecdsas := []SignatureScheme{ECDSAWithSHA1, ECDSAWithP256AndSHA256, ECDSAWithP384AndSHA384, ECDSAWithP521AndSHA512}
 	hello := &clientHelloMsg{
 		vers:                         clientHelloVersion,
 		compressionMethods:           []uint8{compressionNone},
@@ -63,8 +64,8 @@ func MakeClientHello(config *Config) (*clientHelloMsg, ecdheParameters, error) {
 		secureRenegotiationSupported: true,
 		alpnProtocols:                config.NextProtos,
 		supportedVersions:            supportedVersions,
-		// supportedSignatureAlgorithms: tlsmodel.ECDSASignatureAlgorithms,
-		// supportedSignatureAlgorithmsCert: ECDSASignatureAlgorithms,
+		// supportedSignatureAlgorithms:     ecdsas,
+		// supportedSignatureAlgorithmsCert: ecdsas,
 	}
 	possibleCipherSuites := config.cipherSuites()
 	hello.cipherSuites = make([]uint16, 0, len(possibleCipherSuites))
