@@ -1384,25 +1384,27 @@ func adjustUsingCertificateSecurity(score *SecurityScore, scan ScanResult) {
 					cap(score, "T", fmt.Sprintf("Got malformed public key format"))
 				}
 			case x509.ECDSA:
+				//See https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-57pt1r4.pdf for details pp 53 for comparable key strengths
 				if pk, ok := publicKey.(*ecdsa.PublicKey); ok {
 					bitlength := pk.Y.BitLen()
 					switch {
-					case bitlength >= 1024 && bitlength < 2048:
-						cap(score, "B", fmt.Sprintf("Public key length is %d (< 2048)", bitlength))
-					case bitlength < 1024:
-						cap(score, "F", fmt.Sprintf("Public key length is %d (< 1024)", bitlength))
+					case bitlength >= 224 && bitlength < 255:
+						cap(score, "B", fmt.Sprintf("ECDSA Public key length is %d (< 255)", bitlength))
+					case bitlength < 224:
+						cap(score, "F", fmt.Sprintf("ECDSA Public key length is %d (< 224)", bitlength))
 					}
 				} else {
 					cap(score, "T", fmt.Sprintf("Got malformed public key format"))
 				}
 			case x509.DSA:
+				//See https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-57pt1r4.pdf for details pp 53 for comparable key strengths
 				if pk, ok := publicKey.(*dsa.PublicKey); ok {
 					bitlength := pk.Y.BitLen()
 					switch {
 					case bitlength >= 1024 && bitlength < 2048:
-						cap(score, "B", fmt.Sprintf("Public key length is %d (< 2048)", bitlength))
+						cap(score, "B", fmt.Sprintf("DSA Public key length is %d (< 2048)", bitlength))
 					case bitlength < 1024:
-						cap(score, "F", fmt.Sprintf("Public key length is %d (< 1024)", bitlength))
+						cap(score, "F", fmt.Sprintf("DSA Public key length is %d (< 1024)", bitlength))
 					}
 				} else {
 					cap(score, "T", fmt.Sprintf("Got malformed public key format"))
