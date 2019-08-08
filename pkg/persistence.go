@@ -2,7 +2,6 @@ package tlsaudit
 
 import (
 	"bytes"
-	"crypto/rsa"
 	"encoding/gob"
 	"fmt"
 	"io/ioutil"
@@ -122,13 +121,14 @@ func ListScans(rewindDays int, completed bool) (result []tlsmodel.AdvancedScanRe
 func StreamScan(day, scanID string, callback func(progress, total int, results []tlsmodel.HumanScanResult)) {
 	if psr, err := LoadScanRequest(day, scanID); err == nil {
 		tot := psr.Progress
-		streamExistingResult(psr, func(progress int, results []tlsmodel.ScanResult, narrative string) {
-			callback(progress, tot, humanise(results))
+		streamExistingResult(psr, func(progress int, results []tlsmodel.HumanScanResult, narrative string) {
+			callback(progress, tot, results)
 		})
 	}
 }
 
-func humanise(in []tlsmodel.ScanResult) (out []tlsmodel.HumanScanResult) {
+//Humanise turns ScanResults to HumanScabResults
+func Humanise(in []tlsmodel.ScanResult) (out []tlsmodel.HumanScanResult) {
 	for _, r := range in {
 		out = append(out, r.ToStringStruct())
 	}
@@ -137,7 +137,7 @@ func humanise(in []tlsmodel.ScanResult) (out []tlsmodel.HumanScanResult) {
 
 //StreamExistingResult sends data via a callback function
 func streamExistingResult(psr tlsmodel.PersistedScanRequest,
-	callback func(progress int, result []tlsmodel.ScanResult, narrative string)) {
+	callback func(progress int, result []tlsmodel.HumanScanResult, narrative string)) {
 	dbDir := filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
 	opts := badger.DefaultOptions(dbDir)
 	opts.Logger = myLogger
@@ -188,7 +188,7 @@ func streamExistingResult(psr tlsmodel.PersistedScanRequest,
 }
 
 //PersistScans persists the result of scans per server
-func PersistScans(psr tlsmodel.PersistedScanRequest, server string, scans []tlsmodel.ScanResult) {
+func PersistScans(psr tlsmodel.PersistedScanRequest, server string, scans []tlsmodel.HumanScanResult) {
 	dbDir := filepath.Join(baseScanDBDirectory, psr.Request.Day, psr.Request.ScanID)
 	opts := badger.DefaultOptions(dbDir)
 	opts.Logger = myLogger
@@ -351,11 +351,10 @@ func LoadScanRequest(dir, scanID string) (psr tlsmodel.PersistedScanRequest, e e
 	return psr, e
 }
 
-//arshallScanResults marshalls scan results
-func marshallScanResults(s []tlsmodel.ScanResult) []byte {
+//marshallScanResults marshalls scan results
+func marshallScanResults(s []tlsmodel.HumanScanResult) []byte {
 	result := bytes.Buffer{}
-	gob.Register(rsa.PublicKey{}) // there is an indirect reference to it,
-	gob.Register([]tlsmodel.ScanResult{})
+	gob.Register([]tlsmodel.HumanScanResult{})
 	err := gob.NewEncoder(&result).Encode(&s)
 	if err != nil {
 		log.Print(err)

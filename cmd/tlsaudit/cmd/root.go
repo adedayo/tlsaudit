@@ -186,7 +186,7 @@ func runner(cmd *cobra.Command, args []string) error {
 	}
 	sort.Sort(tlsmodel.ScanResultSorter(scanResults))
 	if jsonOut {
-		outputJSON(scanResults)
+		outputJSON(tlsaudit.Humanise(scanResults))
 	} else {
 		outputText(scanResults, config, cmd)
 	}
@@ -233,12 +233,8 @@ func deDuplicate(data *[]string) {
 	}
 	*data = (*data)[:j]
 }
-func outputJSON(ports []tlsmodel.ScanResult) {
-	out := []tlsmodel.HumanScanResult{}
-	for _, p := range ports {
-		out = append(out, p.ToStringStruct())
-	}
-	if jsonData, err := json.Marshal(out); err == nil {
+func outputJSON(out []tlsmodel.HumanScanResult) {
+	if jsonData, err := json.MarshalIndent(out, "", " "); err == nil {
 		fmt.Printf("%s\n", string(jsonData))
 	}
 
@@ -310,7 +306,7 @@ func generateResultText(r tlsmodel.ScanResult, currentServerInput string) (resul
 			ciphers = r.CipherPreferenceOrderByProtocol[p]
 		}
 		for _, c := range ciphers {
-			result += fmt.Sprintf(format3, tlsdefs.TLSVersionMap[p], "", tlsdefs.CipherSuiteMap[c])
+			result += fmt.Sprintf(format3, p, "", c)
 		}
 	}
 	return

@@ -452,7 +452,7 @@ func runTLSScan(ipSource func() []tlsmodel.GroupedHost, ipToHostnameResolver fun
 			}
 		}
 		sort.Sort(tlsmodel.ScanResultSorter(scanResults))
-		PersistScans(psr, host, scanResults)
+		PersistScans(psr, host, Humanise(scanResults))
 
 		if err := ioutil.WriteFile(progress, []byte(fmt.Sprintf("%d,%d", counter, len(hosts))), 0644); err != nil {
 			log.Error(err)

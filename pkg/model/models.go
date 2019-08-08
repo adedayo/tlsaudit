@@ -684,8 +684,14 @@ type AdvancedScanRequest struct {
 
 //GroupedHost exploded hosts from an associated ScanGroup
 type GroupedHost struct {
-	ScanGroup ScanGroup
-	Hosts     []string
+	ScanGroup    ScanGroup
+	Hosts        []string
+	IPAndDomains []IPAndDomain
+}
+
+//IPAndDomain a representation of an IP and a possibly empty domain name
+type IPAndDomain struct {
+	IP, Domain string
 }
 
 //PersistedScanRequest persisted version of ScanRequest
@@ -933,9 +939,9 @@ type ScanResult struct {
 }
 
 //UnmarsharlScanResult builds ScanResults from bytes
-func UnmarsharlScanResult(data []byte) ([]ScanResult, error) {
+func UnmarsharlScanResult(data []byte) ([]HumanScanResult, error) {
 
-	sr := []ScanResult{}
+	sr := []HumanScanResult{}
 	gob.Register(sr)
 	buf := bytes.NewBuffer(data)
 	err := gob.NewDecoder(buf).Decode(&sr)

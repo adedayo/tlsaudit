@@ -46,14 +46,16 @@ func RealtimeAdvancedScan(w http.ResponseWriter, req *http.Request) {
 			defer conn.Close()
 			var request tlsmodel.AdvancedScanRequest
 			if err := conn.ReadJSON(&request); err == nil {
-				hosts := []string{}
 				hostCount := 0
 				psr := tlsmodel.PersistedScanRequest{}
 				if request.ScanID == "" { //start a fresh scan
 					request.ScanID = getNextScanID()
 					for _, sg := range request.ScanGroups {
+						hosts := []string{}
+						ipAndDomain := []tlsmodel.IPAndDomain{}
 						for _, x := range sg.CIDRRanges {
-							x = strings.ReplaceAll(x, ",", "")
+							//Normalise the domain into a CIDR format
+							x = strings.ReplaceAll(x, ",", "") //trim off any remaining commas
 							rng := "/32"
 							ports := ""
 							if strings.Contains(x, "/") {
@@ -66,21 +68,40 @@ func RealtimeAdvancedScan(w http.ResponseWriter, req *http.Request) {
 							} else {
 								x = strings.Split(x, "/")[0] + rng
 							}
+							//-CIDR Normalisation complete
+							domain := x
 							hs := cidr.Expand(x)
+							ipDomain := []tlsmodel.IPAndDomain{}
 							if ports != "" {
 								for i, h := range hs {
-									hs[i] = fmt.Sprintf("%s:%s/32", h, ports)
+									hostCIDR := fmt.Sprintf("%s:%s/32", h, ports)
+									hs[i] = hostCIDR
+									ipDomain = append(ipDomain, tlsmodel.IPAndDomain{
+										IP:     hostCIDR,
+										Domain: domain,
+									})
 								}
 							}
-							hosts = append(hosts, hs...)
+							for _, h := range hs {
+								hosts = append(hosts, h)
+								ipAndDomain = append(ipAndDomain, tlsmodel.IPAndDomain{
+									IP:     h,
+									Domain: domain,
+								})
+							}
 						}
 						//shuffle hosts randomly
 						rand.Shuffle(len(hosts), func(i, j int) {
 							hosts[i], hosts[j] = hosts[j], hosts[i]
 						})
+						rand.Shuffle(len(ipAndDomain), func(i, j int) {
+							ipAndDomain[i], ipAndDomain[j] = ipAndDomain[j], ipAndDomain[i]
+						})
+
 						psr.GroupedHosts = append(psr.GroupedHosts, tlsmodel.GroupedHost{
-							ScanGroup: sg,
-							Hosts:     hosts,
+							ScanGroup:    sg,
+							Hosts:        hosts,
+							IPAndDomains: ipAndDomain,
 						})
 						hostCount += len(hosts)
 					}
@@ -102,11 +123,10 @@ func RealtimeAdvancedScan(w http.ResponseWriter, req *http.Request) {
 				scanID := psr.Request.ScanID
 
 				//callback function to stream results over a websocket
-				callback := func(position int, results []tlsmodel.ScanResult, narrative string) {
-					// persistScans(fmt.Sprintf("%s;%s:%s", scanID, result.Server, result.Port), result)
+				callback := func(position int, results []tlsmodel.HumanScanResult, narrative string) {
 					res := []tlsmodel.HumanScanResult{}
 					for _, r := range results {
-						res = append(res, r.ToStringStruct())
+						res = append(res, r)
 					}
 					out := tlsmodel.ScanProgress{
 						ScanID:      scanID,
@@ -121,7 +141,7 @@ func RealtimeAdvancedScan(w http.ResponseWriter, req *http.Request) {
 
 				counter := 0
 				for ghi, ghs := range psr.GroupedHosts {
-					for _, host := range ghs.Hosts {
+					for _, host := range ghs.IPAndDomains {
 						counter++
 						if counter < psr.Progress {
 							continue
@@ -129,7 +149,7 @@ func RealtimeAdvancedScan(w http.ResponseWriter, req *http.Request) {
 						position := counter
 						scan := make(map[string]tlsmodel.ScanResult)
 						results := []<-chan tlsmodel.ScanResult{}
-						results = append(results, ScanCIDRTLS(host, request.Config))
+						results = append(results, ScanCIDRTLS(host.Domain, request.Config))
 						for result := range MergeResultChannels(results...) {
 							key := result.Server + result.Port
 							result.GroupID = ghi
@@ -137,7 +157,7 @@ func RealtimeAdvancedScan(w http.ResponseWriter, req *http.Request) {
 								scan[key] = result
 								narrative := fmt.Sprintf("Partial scan of %s. Progress %f%% %d hosts of a total of %d in %f seconds\n",
 									result.Server, 100*float32(position)/float32(psr.HostCount), position, psr.HostCount, time.Since(psr.ScanStart).Seconds())
-								callback(position, []tlsmodel.ScanResult{result}, narrative)
+								callback(position, Humanise([]tlsmodel.ScanResult{result}), narrative)
 							}
 						}
 						psr.Progress = position
@@ -148,10 +168,10 @@ func RealtimeAdvancedScan(w http.ResponseWriter, req *http.Request) {
 							scanResults = append(scanResults, scan[k])
 						}
 						sort.Sort(tlsmodel.ScanResultSorter(scanResults))
-						PersistScans(psr, host, scanResults)
+						PersistScans(psr, host.IP, Humanise(scanResults))
 						narrative := fmt.Sprintf("Finished scan of %s. Progress %f%% %d hosts of a total of %d in %f seconds\n",
 							host, 100*float32(position)/float32(psr.HostCount), position, psr.HostCount, psr.ScanEnd.Sub(psr.ScanStart).Seconds())
-						callback(position, scanResults, narrative)
+						callback(position, Humanise(scanResults), narrative)
 					}
 				}
 			} else {
