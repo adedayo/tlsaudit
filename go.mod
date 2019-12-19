@@ -3,12 +3,14 @@ module github.com/adedayo/tlsaudit
 go 1.12
 
 require (
+	github.com/AndreasBriese/bbloom v0.0.0-20190825152654-46b345b51c96 // indirect
 	github.com/adedayo/cidr v0.1.5
 	github.com/adedayo/tcpscan v0.5.8
 	github.com/adedayo/tls-definitions v0.0.2
 	github.com/adedayo/tls-stats v0.0.1 // indirect
 	github.com/carlescere/scheduler v0.0.0-20170109141437-ee74d2f83d82
 	github.com/dgraph-io/badger v2.0.0-rc2+incompatible
+	github.com/dgryski/go-farm v0.0.0-20191112170834-c2139c5d712b // indirect
 	github.com/golang/protobuf v1.3.2 // indirect
 	github.com/gorilla/handlers v1.4.0
 	github.com/gorilla/mux v1.7.0

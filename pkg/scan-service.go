@@ -29,7 +29,6 @@ import (
 var (
 	//TLSAuditConfigPath is the default config path of the TLSAudit service
 	TLSAuditConfigPath = filepath.Join("data", "config", "TLSAuditConfig.yml")
-	// tempTable              = []byte("tempTable")
 	//control files
 	runFlag     = "runlock.txt"
 	runFlag2    = "deletethistoresume.txt"

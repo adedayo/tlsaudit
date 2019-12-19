@@ -1194,6 +1194,7 @@ func (s ScanResult) ToString(config ScanConfig) (result string) {
 					result += fmt.Sprintf("\t\tSerial Number: %x\n", cert.SerialNumber)
 					result += "\t\tValid from: " + cert.NotBefore.String() + "\n"
 					result += "\t\tValid until: " + cert.NotAfter.String() + "\n"
+					result += fmt.Sprintf("\t\tVersion: %d\n", cert.Version)
 					result += "\t\tIssuer: " + cert.Issuer.String() + "\n"
 					result += "\t\tSignature algorithm: " + cert.SignatureAlgorithm.String() + "\n"
 					sigLen := len(cert.Signature) - 1
