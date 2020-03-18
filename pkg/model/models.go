@@ -1321,7 +1321,7 @@ func scoreProtocol(protocol uint16) (score int) {
 	case tlsdefs.VersionSSL20:
 		score = 0
 	case tls.VersionSSL30:
-		score = 80
+		score = 0 // pegged down from 80
 	case tls.VersionTLS10:
 		score = 70 // pegged down from 90
 	case tls.VersionTLS11:
