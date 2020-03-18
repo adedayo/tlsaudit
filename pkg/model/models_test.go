@@ -30,13 +30,14 @@ func TestGetCipherConfig(t *testing.T) {
 				cipher:   "TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_GCM_SHA384",
 			},
 			wantConfig: CipherConfig{
-				CipherID:       0xC087,
-				Cipher:         "TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_GCM_SHA384",
-				Authentication: "ECDSA",
-				IsExport:       false,
-				KeyExchange:    "ECDHE",
-				Encryption:     "CAMELLIA_256_GCM",
-				MACPRF:         "SHA384",
+				CipherID:               0xC087,
+				Cipher:                 "TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_GCM_SHA384",
+				Authentication:         "ECDSA",
+				IsExport:               false,
+				SupportsForwardSecrecy: true,
+				KeyExchange:            "ECDHE",
+				Encryption:             "CAMELLIA_256_GCM",
+				MACPRF:                 "SHA384",
 			},
 			wantErr: false,
 		},
@@ -59,7 +60,7 @@ func TestGetCipherConfig(t *testing.T) {
 				return
 			}
 			if !reflect.DeepEqual(gotConfig, tt.wantConfig) {
-				t.Errorf("GetCipherConfig() = %v, want %v", gotConfig, tt.wantConfig)
+				t.Errorf("GetCipherConfig() = %v, want %#v", gotConfig, tt.wantConfig)
 			}
 		})
 	}
