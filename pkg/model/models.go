@@ -1236,57 +1236,8 @@ func (s ScanResult) String() string {
 // https://github.com/ssllabs/research/wiki/SS
 // https://community.qualys.com/docs/DOC-6321-ssl-labs-grading-2018
 //SecurityScoreL-Server-Rating-Guide contains the overall grading of a TLS/SSL port
-func (s *ScanResult) CalculateScore() (result SecurityScore) {
-
-	max := uint16(0)
-	min := uint16(1000)
-	for _, p := range s.SupportedProtocols {
-		if p > max {
-			max = p
-		}
-		if p < min {
-			min = p
-		}
-	}
-
-	highProtocol := scoreProtocol(max)
-	lowProtocol := scoreProtocol(min)
-
-	result.ProtocolScore = (highProtocol + lowProtocol) / 2
-
-	if s.SupportsTLS() {
-
-		cipherKeyExchangeScore := 1000
-		cipherStrengthMinScore := 1000
-		cipherStrengthMaxScore := 0
-		// for _, p := range s.SupportedProtocols {
-		p := s.SupportedProtocols[0] // use the strongest protocol
-		c := s.SelectedCipherByProtocol[p]
-		selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
-		var cipherSuite []uint16
-		if s.HasCipherPreferenceOrderByProtocol[p] {
-			cipherSuite = s.CipherPreferenceOrderByProtocol[p]
-		} else {
-			cipherSuite = s.CipherSuiteByProtocol[p]
-		}
-		for _, c := range cipherSuite {
-			selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
-		}
-		// }
-
-		result.KeyExchangeScore = cipherKeyExchangeScore
-
-		result.CipherEncryptionScore = (cipherStrengthMaxScore + cipherStrengthMinScore) / 2
-
-		result.Grade = toTLSGrade((30*result.ProtocolScore + 30*result.KeyExchangeScore + 40*result.CipherEncryptionScore) / 100)
-
-		scoreCertificate(&result, s)
-		result.adjustScore(*s)
-	} else {
-		//No TLS
-		result.Grade = toTLSGrade(-1)
-	}
-	return
+func (s *ScanResult) CalculateScore() SecurityScore {
+	return score2009q(s)
 }
 
 func scoreCertificate(score *SecurityScore, scan *ScanResult) {
@@ -1335,7 +1286,45 @@ func scoreProtocol(protocol uint16) (score int) {
 }
 
 //SecurityScore contains the overall grading of a TLS/SSL port
-func (score *SecurityScore) adjustScore(scan ScanResult) {
+func (score *SecurityScore) adjustScore2009p(scan ScanResult) {
+
+	if !supportsTLS12(scan) {
+		cap(score, "C", "TLS v1.2 not suported")
+	}
+
+	if supportsSSLV3(scan) {
+		cap(score, "C", "Supports SSL v3. Vulnerable to POODLE attack")
+	}
+
+	if !supportsPFS(scan) {
+		cap(score, "B", "Forward Secrecy not suported")
+	}
+
+	if !supportsAEAD(scan) {
+		cap(score, "B", "Authenticated Encryption (AEAD) not suported")
+	}
+
+	if supportsAnonAuth(scan) {
+		cap(score, "F", "Server supports anonymous (insecure) suites")
+	}
+
+	adjustUsingCertificateSecurity(score, scan)
+
+	if scan.SupportsTLSFallbackSCSV {
+		if score.Grade == "A" {
+			score.Grade = "A+"
+		} else if score.Grade == "TA" {
+			score.Grade = "TA+"
+		}
+	}
+}
+
+//SecurityScore contains the overall grading of a TLS/SSL port
+func (score *SecurityScore) adjustScore2009q(scan ScanResult) {
+
+	if supportsTLS10Or11(scan) {
+		cap(score, "B", "Supports TLS v1.1 or TLS v1.0")
+	}
 
 	if !supportsTLS12(scan) {
 		cap(score, "C", "TLS v1.2 not suported")
@@ -1446,6 +1435,16 @@ func cap(score *SecurityScore, grade, reason string) {
 func supportsTLS12(scan ScanResult) (yes bool) {
 	for _, p := range scan.SupportedProtocols {
 		if p == tls.VersionTLS12 {
+			yes = true
+			break
+		}
+	}
+	return
+}
+
+func supportsTLS10Or11(scan ScanResult) (yes bool) {
+	for _, p := range scan.SupportedProtocols {
+		if p == tls.VersionTLS10 || p == tls.VersionTLS11 {
 			yes = true
 			break
 		}
