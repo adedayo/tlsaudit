@@ -843,7 +843,7 @@ type ServerHelloMessage struct {
 	Raw                          []byte
 	Vers                         uint16
 	Random                       []byte
-	SessionId                    []byte
+	SessionID                    []byte
 	CipherSuite                  uint16
 	CompressionMethod            uint8
 	NextProtoNeg                 bool

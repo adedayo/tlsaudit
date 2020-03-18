@@ -7,7 +7,6 @@ require (
 	github.com/adedayo/cidr v0.1.5
 	github.com/adedayo/tcpscan v0.5.8
 	github.com/adedayo/tls-definitions v0.0.2
-	github.com/adedayo/tls-stats v0.0.1 // indirect
 	github.com/carlescere/scheduler v0.0.0-20170109141437-ee74d2f83d82
 	github.com/dgraph-io/badger v2.0.0-rc2+incompatible
 	github.com/dgryski/go-farm v0.0.0-20191112170834-c2139c5d712b // indirect

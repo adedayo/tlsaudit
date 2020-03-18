@@ -532,7 +532,7 @@ func (m *serverHelloMsg) Export() tlsmodel.ServerHelloMessage {
 		Raw:                          m.raw,
 		Vers:                         m.vers,
 		Random:                       m.random,
-		SessionId:                    m.sessionId,
+		SessionID:                    m.sessionId,
 		CipherSuite:                  m.cipherSuite,
 		CompressionMethod:            m.compressionMethod,
 		NextProtoNeg:                 m.nextProtoNeg,
