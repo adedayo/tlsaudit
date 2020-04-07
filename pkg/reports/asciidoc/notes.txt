@@ -1,0 +1,6 @@
+Requires asciidoctor-pdf installed
+The code source-highlighter uses rouge -> gem install rouge
+See languages here https://github.com/rouge-ruby/rouge/wiki/List-of-supported-languages-and-lexers
+
+Note that the charting library go-charts generates SVG with rgba colour scheme, which prawn-svg (https://github.com/mogest/prawn-svg) 
+does not support, perhaps similar to https://github.com/asciidoctor/asciidoctor-pdf/issues/868
