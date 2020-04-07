@@ -275,7 +275,7 @@ func getScanSummary(dateDir, scanID string) tlsmodel.ScanResultSummary {
 				}
 				hosts[r.Server] = g
 			} else {
-				hosts[r.Server] = tlsmodel.GradePair{grade, grade}
+				hosts[r.Server] = tlsmodel.GradePair{Best: grade, Worst: grade}
 			}
 
 			if r.Score.OrderGrade(summary.BestGrade) < r.Score.OrderGrade(grade) {
