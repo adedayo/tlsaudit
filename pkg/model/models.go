@@ -714,16 +714,34 @@ type PersistedScanRequest struct {
 
 //ScanResultSummary is the summary of a scan result session
 type ScanResultSummary struct {
-	Request          AdvancedScanRequest
-	ScanStart        time.Time
-	ScanEnd          time.Time
-	Progress         int
-	HostCount        int
-	PortCount        int
-	BestGrade        string
-	WorstGrade       string
-	HostGrades       map[string]string
-	GradeToHostPorts map[string][]string
+	Request   AdvancedScanRequest
+	ScanStart time.Time
+	ScanEnd   time.Time
+	Progress  int
+	BasicScanSummary
+	// HostCount        int
+	// PortCount        int
+	// BestGrade        string
+	// WorstGrade       string
+	// HostGrades       map[string]string   //mapping of "host IP" -> "BestGrade:WorstGrade"
+	// GradeToHostPorts map[string][]string //mapping of "grade" -> []{"hostIP:Port" ...}, e.g. "A+" -> []{"10.10.10.10:443"}
+}
+
+//BasicScanSummary is a subset of ScanResultSammary
+type BasicScanSummary struct {
+	HostCount         int
+	PortCount         int
+	BestGrade         string
+	BestGradeExample  GradeExample
+	WorstGrade        string
+	WorstGradeExample GradeExample
+	HostGrades       map[string]GradePair //mapping of "host IP" -> "BestGrade x WorstGrade"
+	GradeToHostPorts map[string][]string  //mapping of "grade" -> []{"hostIP:Port" ...}, e.g. "A+" -> []{"10.10.10.10:443"}
+}
+
+//GradeExample is an instance with a given grade
+type GradeExample struct {
+	Grade, Server, Port, HostName string
 }
 
 //Marshall scan request
@@ -800,7 +818,7 @@ func (SecurityScore) OrderGrade(grade string) int {
 		return 110
 	case "F":
 		return 108
-	case "T":
+	case "T": //Has certificate issues - Not Trustworthy
 		return 106
 	case "TA+":
 		return 20
@@ -816,7 +834,7 @@ func (SecurityScore) OrderGrade(grade string) int {
 		return 10
 	case "TF":
 		return 8
-	case "U":
+	case "U": // Not TLS found, cleartext communication
 		return 6
 	case "Worst": // used to indicate worst case before data
 		return 200
@@ -953,7 +971,7 @@ func UnmarsharlScanResult(data []byte) ([]HumanScanResult, error) {
 
 //HumanScanResult is a Stringified version of ScanResult
 type HumanScanResult struct {
-	Server                                 string
+	Server                                 string //IP address
 	HostName                               string
 	Port                                   string
 	SupportsTLS                            bool
@@ -1468,7 +1486,7 @@ func supportsPFS(scan ScanResult) bool {
 	pfs := true
 
 	for _, p := range scan.SupportedProtocols {
-		if p == tls.VersionTLS13 { //TLS v1.3 only soppurts (EC)DHE key exchange: https://tools.ietf.org/html/rfc8446#section-4.1
+		if p == tls.VersionTLS13 { //TLS v1.3 only supports (EC)DHE key exchange: https://tools.ietf.org/html/rfc8446#section-4.1
 			continue
 		}
 		cipher := scan.SelectedCipherByProtocol[p]

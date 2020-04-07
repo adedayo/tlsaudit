@@ -21,6 +21,8 @@ var (
 	//timeout for network read deadlines
 	patientTimeout = 10 * time.Second
 	defaultTimeout = 5 * time.Second
+	hostnames      = make(map[string]string)
+	hostNameMutex  = sync.RWMutex{}
 )
 
 type orderedCipherStruct struct {
@@ -41,6 +43,28 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 	}()
 
 	originalDomain := strings.Split(strings.Split(cidr, ":")[0], "/")[0]
+	//resolve domain name if necessary
+	hostNameMutex.Lock()
+	if domain, present := hostnames[originalDomain]; present {
+		originalDomain = domain
+	} else {
+		ip := net.ParseIP(originalDomain)
+		if ip == nil { //not an IP, likely already a domain name
+			hostnames[originalDomain] = originalDomain
+		} else {
+			//we've got an IP, attempt to resolve the hostname
+			domains, err := net.LookupAddr(originalDomain)
+			if err != nil {
+				hostnames[originalDomain] = originalDomain
+			} else {
+				dom := domains[0] // just take the first hostname
+				hostnames[originalDomain] = dom
+				originalDomain = dom
+			}
+		}
+	}
+	hostNameMutex.Unlock()
+
 	go func() {
 		defer close(scanResults)
 		scan := make(map[string]portscan.PortACK)

@@ -44,6 +44,7 @@ import (
 	tlsdefs "github.com/adedayo/tls-definitions"
 	tlsaudit "github.com/adedayo/tlsaudit/pkg"
 	tlsmodel "github.com/adedayo/tlsaudit/pkg/model"
+	"github.com/adedayo/tlsaudit/pkg/reports/asciidoc"
 	"github.com/spf13/cobra"
 )
 
@@ -76,17 +77,18 @@ func Execute(version string) {
 }
 
 var output, input, service string
-var jsonOut, protocolsOnly, hideCerts, quiet, cipherMetrics, hideNoTLS bool
+var report, jsonOut, protocolsOnly, hideCerts, quiet, cipherMetrics, hideNoTLS bool
 var timeout, rate, api int
 
 func init() {
 	rootCmd.Flags().BoolVarP(&jsonOut, "json", "j", false, "generate JSON output")
 	rootCmd.Flags().BoolVarP(&protocolsOnly, "protocols-only", "p", false, "only check supported protocols - will not do detailed checks on supported ciphers (default: false)")
 	rootCmd.Flags().BoolVarP(&hideCerts, "hide-certs", "c", false, "suppress certificate information in output (default: false)")
+	rootCmd.Flags().BoolVarP(&report, "report", "r", false, "generate a PDF report of the scan. Requires asciidoctor-pdf installed (default: false)")
 	rootCmd.Flags().BoolVar(&hideNoTLS, "hide-no-tls", false, "suppress the display of ports with no TLS support in output. Note that non-open ports will be shown as not supporting TLS when ports are explicitly specified in the host to audit, bypassing host port scan, which makes this flag particularly useful (default: false)")
 	rootCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "control whether to produce a running commentary of progress or stay quiet till the end (default: false)")
 	rootCmd.Flags().IntVarP(&timeout, "timeout", "t", 5, "TIMEOUT (in seconds) to adjust how much we are willing to wait for servers to come back with responses. Smaller timeout sacrifices accuracy for speed")
-	rootCmd.Flags().IntVarP(&rate, "rate", "r", 1000, "the rate (in packets per second) that we should use to scan for open ports")
+	rootCmd.Flags().IntVar(&rate, "rate", 1000, "the rate (in packets per second) that we should use to scan for open ports")
 	rootCmd.Flags().IntVar(&api, "api", 12345, "run as an API service on the specified port")
 	rootCmd.Flags().StringVarP(&output, "output", "o", "tlsaudit.txt", `write results into an output FILE`)
 	rootCmd.Flag("output").NoOptDefVal = "tlsaudit.txt"
@@ -164,8 +166,8 @@ func runner(cmd *cobra.Command, args []string) error {
 		println("There are no resolvable IPs to process!")
 		return nil
 	}
+	start := time.Now()
 	for _, host := range args {
-		start := time.Now()
 		results := []<-chan tlsmodel.ScanResult{}
 		results = append(results, tlsaudit.ScanCIDRTLS(host, config))
 		for result := range tlsaudit.MergeResultChannels(results...) {
@@ -180,6 +182,7 @@ func runner(cmd *cobra.Command, args []string) error {
 				host, 100*float32(processedIPs)/float32(totalIPs), processedIPs, totalIPs, time.Since(start).Seconds())
 		}
 	}
+	stop := time.Now()
 	var scanResults []tlsmodel.ScanResult
 	for k := range scan {
 		scanResults = append(scanResults, scan[k])
@@ -189,6 +192,30 @@ func runner(cmd *cobra.Command, args []string) error {
 		outputJSON(tlsaudit.Humanise(scanResults))
 	} else {
 		outputText(scanResults, config, cmd)
+	}
+
+	if report {
+		results := tlsaudit.Humanise(scanResults)
+		// getBasicSummary(results)
+		summary := tlsmodel.ScanResultSummary{
+			ScanStart:        start,
+			ScanEnd:          stop,
+			BasicScanSummary: tlsmodel.GetBasicScanSummary(results),
+			Progress:         100,
+			Request: tlsmodel.AdvancedScanRequest{
+				Config: config,
+				ScanGroups: []tlsmodel.ScanGroup{tlsmodel.ScanGroup{
+					Description: fmt.Sprintf("A TLSAudit %s (https://github.com/adedayo/tlsaudit) scan", appVersion),
+					CIDRRanges:  args,
+				}},
+			},
+		}
+		paths, err := asciidoc.GenerateReport(summary, results, appVersion)
+		if err != nil {
+			panic(err)
+		}
+
+		println("Report: ", paths)
 	}
 
 	return nil

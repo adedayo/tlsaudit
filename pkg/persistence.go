@@ -227,10 +227,10 @@ func getScanSummary(dateDir, scanID string) tlsmodel.ScanResultSummary {
 	}
 	lock.Unlock()
 	summary := tlsmodel.ScanResultSummary{}
-	summary.HostGrades = make(map[string]string)
+	summary.HostGrades = make(map[string]tlsmodel.GradePair)
 	summary.WorstGrade = "Worst"
 	summary.BestGrade = "Best"
-	hosts := make(map[string]gradePair) // map from host to the best and worst grades
+	hosts := make(map[string]tlsmodel.GradePair) // map from host to the best and worst grades
 	gradeToPorts := make(map[string][]string)
 	key := fmt.Sprintf("%s:%s", dateDir, scanID)
 	scanCacheLock.Lock()
@@ -266,16 +266,16 @@ func getScanSummary(dateDir, scanID string) tlsmodel.ScanResultSummary {
 			}
 
 			if g, ok := hosts[r.Server]; ok {
-				if g.best == "" || r.Score.OrderGrade(g.best) < r.Score.OrderGrade(grade) { // better grade
-					g.best = grade
+				if g.Best == "" || r.Score.OrderGrade(g.Best) < r.Score.OrderGrade(grade) { // better grade
+					g.Best = grade
 				}
 
-				if g.worst == "" || r.Score.OrderGrade(g.worst) > r.Score.OrderGrade(grade) { //worse grade
-					g.worst = grade
+				if g.Worst == "" || r.Score.OrderGrade(g.Worst) > r.Score.OrderGrade(grade) { //worse grade
+					g.Worst = grade
 				}
 				hosts[r.Server] = g
 			} else {
-				hosts[r.Server] = gradePair{grade, grade}
+				hosts[r.Server] = tlsmodel.GradePair{grade, grade}
 			}
 
 			if r.Score.OrderGrade(summary.BestGrade) < r.Score.OrderGrade(grade) {
@@ -288,9 +288,10 @@ func getScanSummary(dateDir, scanID string) tlsmodel.ScanResultSummary {
 		}
 	})
 
-	for host, grades := range hosts {
-		summary.HostGrades[host] = fmt.Sprintf("%s:%s", grades.worst, grades.best)
-	}
+	summary.HostGrades = hosts
+	// for host, grades := range hosts {
+	// 	summary.HostGrades[host] = fmt.Sprintf("%s:%s", grades.worst, grades.best)
+	// }
 
 	if psr, err := LoadScanRequest(dateDir, scanID); err == nil {
 		summary.ScanStart = psr.ScanStart
