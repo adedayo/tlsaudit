@@ -94,10 +94,22 @@ func GenerateReport(summary tlsmodel.ScanResultSummary, results []tlsmodel.Human
 		return reportPath, fmt.Errorf("%s executable file not found in your $PATH. Install it and ensure that it is in your $PATH", asciidocExec)
 	}
 
+	rr := []scanResult{}
+	scanGrades, charts := createScanCharts(results)
+	if err != nil {
+		return reportPath, err
+	}
+	for i, r := range results {
+		rr = append(rr, scanResult{
+			HumanScanResult: r,
+			Chart:           charts[i],
+			Grade:           scanGrades[i],
+		})
+	}
 	model := reportModel{
 		TLSAuditVersion:      version,
 		Summary:              summary,
-		ScanResults:          results,
+		ScanResults:          rr,
 		WorstGradeText:       summary.WorstGrade,
 		WorstGradeExample:    summary.WorstGradeExample,
 		WorstGradeAdvisories: makeAdvisory(summary.WorstGradeExample),
@@ -139,7 +151,6 @@ func GenerateReport(summary tlsmodel.ScanResultSummary, results []tlsmodel.Human
 				Max: float64(max),
 				Min: 0,
 			},
-			GridMajorStyle: chart.Shown(),
 		},
 		Bars: bars,
 	}
@@ -159,7 +170,7 @@ func GenerateReport(summary tlsmodel.ScanResultSummary, results []tlsmodel.Human
 	model.Logo = data.tlsAuditLogo
 	model.SALLogo = data.salLogo
 	model.Chart = data.charts[0]
-	model.ScanCharts = createScanChart(results)
+	// model.ScanCharts = createScanChart(results)
 
 	t, err := template.New("").Funcs(funcMap).Parse(assets.Report)
 	if err != nil {
@@ -207,15 +218,31 @@ func styleScore(score int) chart.Style {
 	return redStyle
 }
 
-func createScanChart(scans []tlsmodel.HumanScanResult) []string {
+func createScanCharts(scans []tlsmodel.HumanScanResult) ([]string, []string) {
 	charts := []string{}
+	grades := []string{}
+	files := []string{}
+	cleanUp := func() {
+		for _, file := range files {
+			os.Remove(file)
+		}
+	}
 
 	for _, s := range scans {
 		graph := chart.BarChart{
 			Width:  512,
 			Height: 512,
 			Title:  "Rating Breakdown",
+			Background: chart.Style{
+				Padding: chart.Box{
+					Top: 40,
+				},
+			},
 			YAxis: chart.YAxis{
+				Range: &chart.ContinuousRange{
+					Max: 100,
+					Min: 0,
+				},
 				ValueFormatter: func(v interface{}) string {
 					if x, ok := v.(float64); ok {
 						return fmt.Sprintf("%d", int64(x))
@@ -232,17 +259,43 @@ func createScanChart(scans []tlsmodel.HumanScanResult) []string {
 		}
 		buffer := bytes.NewBuffer([]byte{})
 		_ = graph.Render(chart.SVG, buffer)
-		charts = append(charts, fixSVGColour(buffer.String()))
+		c := fixSVGColour(buffer.String())
+
+		chart, err := generateFile([]byte(c), "tlsaudit_chart.*.svg")
+		files = append(files, chart)
+		charts = append(charts, chart)
+		if err != nil {
+			cleanUp()
+			return grades, charts
+		}
+
+		var gradeIcon string
+		grade := strings.ToUpper(strings.TrimSpace(s.Score.Grade))
+		if len(grade) == 1 {
+			gradeIcon = fmt.Sprintf(assets.Grade, colourGrade(grade), grade)
+		} else {
+			gradeIcon = fmt.Sprintf(assets.Grade2, colourGrade(grade), grade)
+		}
+		g, err := generateFile([]byte(gradeIcon), "sal_grade.*.svg")
+		files = append(files, g)
+		grades = append(grades, g)
+		if err != nil {
+			cleanUp()
+			return grades, charts
+		}
+
 	}
-	return charts
+
+	return grades, charts
 }
 
 func cleanAssets(assets reportModel, aDoc string) {
 	os.Remove(assets.Logo)
 	os.Remove(assets.SALLogo)
 	os.Remove(assets.Chart)
-	for _, chart := range assets.ScanCharts {
-		os.Remove(chart)
+	for _, chart := range assets.ScanResults {
+		os.Remove(chart.Chart)
+		os.Remove(chart.Grade)
 	}
 	os.Remove(aDoc)
 }
@@ -346,7 +399,7 @@ func generateGradeLegend(gradeToHostPort map[string][]string) (list string) {
 	}
 	sort.Strings(grades)
 	for _, g := range grades {
-		list += fmt.Sprintf("| %s | %s\n", g, tlsmodel.InterpretGrade(g))
+		list += fmt.Sprintf("| %s | %s | %d \n", g, tlsmodel.InterpretGrade(g), len(gradeToHostPort[g]))
 	}
 	return
 }

@@ -12,7 +12,13 @@ type reportModel struct {
 	WorstGradeAdvisories []string
 	Chart                string
 	Summary              tlsmodel.ScanResultSummary
-	ScanResults          []tlsmodel.HumanScanResult
-	ScanCharts           []string
-	TimeStamp            string
+	ScanResults          []scanResult
+	// ScanCharts           []string
+	TimeStamp string
+}
+
+type scanResult struct {
+	tlsmodel.HumanScanResult
+	Chart string
+	Grade string
 }

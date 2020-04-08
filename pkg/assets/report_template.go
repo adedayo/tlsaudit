@@ -10,6 +10,7 @@ var Report = `:title-page:
 :description: A server security audit
 :sectnums:
 :listing-caption:
+:red: #ff0000
 
 = TLS Audit Report: image:{{ .SALLogo }}[align=center, pdfwidth=0.2in] Server security audit 
 :source-highlighter: rouge
@@ -37,10 +38,10 @@ a!image::{{ .WorstGrade }}[align=center, pdfwidth=1.0in]
 * {{ $advisory }}
 {{ end }}
 
-[cols="1,10", options="header", stripes=even, grid=none]
-.Grade Legend
+[cols="2,10,2", options="header", stripes=even, grid=cols]
+.Grade Legend and count of occurrence
 |===
-| Grade | Meaning
+| Grade | Meaning | Number Found
 {{ generateGradeLegend .Summary.GradeToHostPorts }}
 |===
 ====
@@ -50,20 +51,7 @@ a!image::{{ .WorstGrade }}[align=center, pdfwidth=1.0in]
 
 == Detailed Metrics
 
-Distribution of Grades Measured Across Your Servers
-
-image::{{ .Chart }}[align=center, pdfwidth=4.0in]
-[NOTE]
-====
-[cols="1,10", options="header", stripes=even]
-.Grade Legend
-|===
-| Grade | Meaning
-{{ generateGradeLegend .Summary.GradeToHostPorts }}
-|===
-====
-
-=== Metrics 
+The following are some details and result metrics from the TLS Audit.
 
 [cols="2,5",stripes=even,%autowidth.stretch]
 .TLS Audit Metrics 
@@ -71,16 +59,27 @@ image::{{ .Chart }}[align=center, pdfwidth=4.0in]
 | Worst Grade observed | {{ .Summary.WorstGrade }} (on {{ .Summary.WorstGradeExample.Server }}:{{ .Summary.WorstGradeExample.Port }})
 | Best Grade observed | {{ .Summary.BestGrade }} (on {{ .Summary.BestGradeExample.Server }}:{{ .Summary.BestGradeExample.Port }})
 | Total Number of Hosts (IPs) | {{ .Summary.HostCount }}
-| Total number of Ports (Unique IP:Port(s))| {{ .Summary.PortCount }}
+| Total number of Ports (Unique IP:Port(s))| pass:a[<background_color rgb="{red}">{{ .Summary.PortCount }}</background_color>]
 {{ generateGradeTable .Summary.GradeToHostPorts }}
 {{ generateGradeRangeTable .Summary.HostGrades}}
 |===
 
-
 <<<
 
+== Details of Individual Scan Results
 
-== Individual Results
+The following sections contain detailed description of results for each port that implements SSL/TLS
+
+
+
+{{ range $index, $scan := .ScanResults }}
+{{ template "SCANRESULT" $scan }}
+{{ end }}
+
+
+
+{{ define "SCANRESULT" }}
+=== TLS Audit Report for {{ .HumanScanResult.Server }} ({{ .HumanScanResult.HostName }}) on Port {{ .HumanScanResult.Port }}
 
 [cols="2a,5a",%autowidth.stretch,frame=none,grid=none]
 |===
@@ -88,31 +87,12 @@ image::{{ .Chart }}[align=center, pdfwidth=4.0in]
 ^.^|[cols="1",frame=none,grid=none]
 !===
 ^!Overall Grade
-a!image::{{ .WorstGrade }}[align=center, pdfwidth=1.0in]
+a!image::{{ .Grade }}[align=center, pdfwidth=1.0in]
 !===
 
 |image::{{ .Chart }}[align=center, pdfwidth=4.0in]
 
 |===
-
-[NOTE] 
-.Interpretation of Worst Measured Grade
-====
-{{ range $index, $advisory := .WorstGradeAdvisories }}
-* {{ $advisory }}
-{{ end }}
-
-[cols="1,10", options="header", stripes=even, grid=none]
-.Grade Legend
-|===
-| Grade | Meaning
-{{ generateGradeLegend .Summary.GradeToHostPorts }}
-|===
-====
-
-
-
-{{ define "SCANRESULT" }}
 
 {{ end }}
 `
