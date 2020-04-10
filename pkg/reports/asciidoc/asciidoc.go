@@ -30,10 +30,19 @@ var (
 		}
 	}()
 
+	documentTheme = "tlsaudit-theme.yml"
+
 	funcMap = template.FuncMap{
 		"generateGradeTable":      generateGradeTable,
 		"generateGradeRangeTable": generateGradeRangeTable,
 		"generateGradeLegend":     generateGradeLegend,
+		"interpretGrade":          tlsmodel.InterpretGrade,
+		"getCerts":                getCerts,
+		"describeCerts":           describeCerts,
+		"generateCipherTable":     generateCipherTable,
+		"inc": func(x int) int {
+			return x + 1
+		},
 	}
 
 	rgbaFix  = regexp.MustCompile(`rgba\((\d+,\d+,\d+),1.0\)`)
@@ -94,6 +103,8 @@ func GenerateReport(summary tlsmodel.ScanResultSummary, results []tlsmodel.Human
 		return reportPath, fmt.Errorf("%s executable file not found in your $PATH. Install it and ensure that it is in your $PATH", asciidocExec)
 	}
 
+	//theme
+	generateFile([]byte(assets.Theme), documentTheme)
 	rr := []scanResult{}
 	scanGrades, charts := createScanCharts(results)
 	if err != nil {
@@ -230,14 +241,31 @@ func createScanCharts(scans []tlsmodel.HumanScanResult) ([]string, []string) {
 
 	for _, s := range scans {
 		graph := chart.BarChart{
-			Width:  512,
-			Height: 512,
-			Title:  "Rating Breakdown",
+			Width:  200,
+			Height: 350,
+			Canvas: chart.Style{
+				Padding: chart.Box{
+					Bottom: 50,
+				},
+			},
+			XAxis: chart.Style{
+				TextVerticalAlign:   chart.TextVerticalAlignMiddle,
+				TextHorizontalAlign: chart.TextHorizontalAlignLeft,
+				TextRotationDegrees: -90,
+
+				Padding: chart.Box{
+					Right: 50,
+				},
+				FillColor: chart.ColorAlternateBlue,
+			},
+			Title: "Rating Breakdown",
 			Background: chart.Style{
 				Padding: chart.Box{
 					Top: 40,
 				},
 			},
+			BarWidth:   15,
+			BarSpacing: 15,
 			YAxis: chart.YAxis{
 				Range: &chart.ContinuousRange{
 					Max: 100,
@@ -290,9 +318,11 @@ func createScanCharts(scans []tlsmodel.HumanScanResult) ([]string, []string) {
 }
 
 func cleanAssets(assets reportModel, aDoc string) {
+	os.Remove(documentTheme)
 	os.Remove(assets.Logo)
 	os.Remove(assets.SALLogo)
 	os.Remove(assets.Chart)
+	os.Remove(assets.WorstGrade)
 	for _, chart := range assets.ScanResults {
 		os.Remove(chart.Chart)
 		os.Remove(chart.Grade)
@@ -428,6 +458,49 @@ func generateGradeRangeTable(t map[string]tlsmodel.GradePair) (table string) {
 	for _, h := range hosts {
 		pair := t[h]
 		table += fmt.Sprintf("| Grade range for %s | *Worst Grade*: %s, *Best Grade*: %s\n", h, pair.Worst, pair.Best)
+	}
+	return
+}
+
+func getCerts(scan tlsmodel.HumanScanResult) [][]tlsmodel.HumanCertificate {
+	repeat := make(map[string]bool) //ensure that each cert chain is not duplicated
+	certs := [][]tlsmodel.HumanCertificate{}
+	for _, cc := range scan.CertificatesPerProtocol {
+		if len(cc) > 0 {
+			if _, present := repeat[cc[0].SerialNumber]; !present {
+				certs = append(certs, cc)
+				repeat[cc[0].SerialNumber] = true
+			}
+		}
+	}
+	return certs
+}
+
+func describeCerts(certs []tlsmodel.HumanCertificate) (d []string) {
+	if len(certs) > 1 {
+		for i := 0; i < len(certs); i++ {
+			c := certs[i]
+			d = append(d, fmt.Sprintf("Chain %d (CA: %t): %s. (Expires: %s)", len(certs)-i-1, c.IsCA, c.Subject, c.ValidUntil))
+		}
+	}
+	return
+}
+
+func generateCipherTable(scan tlsmodel.HumanScanResult) (out string) {
+	for _, proto := range scan.SupportedProtocols {
+		if ordered, present := scan.HasCipherPreferenceOrderByProtocol[proto]; present {
+			if ordered {
+				out += fmt.Sprintf(`2+| pass:a[<color rgb="{blue}">%s (suites in server-preferred order)</color>] `, proto)
+				for _, cipher := range scan.CipherPreferenceOrderByProtocol[proto] {
+					out += fmt.Sprintf("| [small]#%s# | \n ", cipher)
+				}
+			} else {
+				out += fmt.Sprintf(`2+| pass:a[<color rgb="{blue}">%s (server has no suites order preference)</color>] `, proto)
+				for _, cipher := range scan.CipherSuiteByProtocol[proto] {
+					out += fmt.Sprintf("| [small]#%s# | \n", cipher)
+				}
+			}
+		}
 	}
 	return
 }

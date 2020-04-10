@@ -126,3 +126,17 @@ func InterpretGrade(grade string) string {
 		return "Unused grade"
 	}
 }
+
+//GetUniqueCertificates returns all the unique certificates (using the certificate serial number) from a scan result
+func GetUniqueCertificates(scan HumanScanResult) (certs []HumanCertificate) {
+	ids := make(map[string]bool)
+	for _, cp := range scan.CertificatesPerProtocol {
+		for _, cert := range cp {
+			if _, present := ids[cert.SerialNumber]; !present {
+				certs = append(certs, cert)
+				ids[cert.SerialNumber] = true
+			}
+		}
+	}
+	return
+}

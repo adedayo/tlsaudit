@@ -201,3 +201,13 @@ const Grade = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
   </g>
 </svg>
 `
+
+//Theme asciidoctor-pdf theme for TLSAudit
+const Theme = `role:
+   red:
+      font-color: #ff0000
+   blue:
+      font-color: #00ff00
+   green:
+      font-color: #0000ff
+`

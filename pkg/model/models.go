@@ -735,8 +735,8 @@ type BasicScanSummary struct {
 	BestGradeExample  GradeExample
 	WorstGrade        string
 	WorstGradeExample GradeExample
-	HostGrades       map[string]GradePair //mapping of "host IP" -> "BestGrade x WorstGrade"
-	GradeToHostPorts map[string][]string  //mapping of "grade" -> []{"hostIP:Port" ...}, e.g. "A+" -> []{"10.10.10.10:443"}
+	HostGrades        map[string]GradePair //mapping of "host IP" -> "BestGrade x WorstGrade"
+	GradeToHostPorts  map[string][]string  //mapping of "grade" -> []{"hostIP:Port" ...}, e.g. "A+" -> []{"10.10.10.10:443"}
 }
 
 //GradeExample is an instance with a given grade
@@ -1009,6 +1009,8 @@ type HumanCertificate struct {
 	Signature          string
 	OcspStapling       bool
 	RevocationDetail   string
+	Version            int
+	IsCA               bool
 }
 
 func getCurve(protocol, cipher uint16, scan ScanResult) string {
@@ -1095,7 +1097,10 @@ func (s ScanResult) ToStringStruct() (out HumanScanResult) {
 			certKey := ""
 			if key, ok := cert.PublicKey.(*rsa.PublicKey); ok {
 				certKey = fmt.Sprintf("%d bits (e %d)", key.N.BitLen(), key.E)
+			} else if key, ok := cert.PublicKey.(*ecdsa.PublicKey); ok {
+				certKey = fmt.Sprintf("EC %d bits", key.X.BitLen())
 			}
+
 			sigLen := len(cert.Signature) - 1
 			sig := fmt.Sprintf("%x...%x", cert.Signature[:8], cert.Signature[sigLen-8:sigLen])
 			ocsp := false
@@ -1109,16 +1114,18 @@ func (s ScanResult) ToStringStruct() (out HumanScanResult) {
 						SubjectSerialNo:    cert.Subject.SerialNumber,
 						SubjectCN:          cert.Subject.CommonName,
 						SubjectAN:          strings.Join(cert.DNSNames, ", "),
-						SerialNumber:       cert.SerialNumber.String(),
+						SerialNumber:       fmt.Sprintf("%0x", cert.SerialNumber),
 						Issuer:             cert.Issuer.String(),
 						PublicKeyAlgorithm: cert.PublicKeyAlgorithm.String(),
-						ValidFrom:          cert.NotBefore.String(),
-						ValidUntil:         cert.NotAfter.String(),
+						ValidFrom:          cert.NotBefore.UTC().Format(time.RFC1123),
+						ValidUntil:         cert.NotAfter.UTC().Format(time.RFC1123),
 						Key:                certKey,
 						SignatureAlgorithm: cert.SignatureAlgorithm.String(),
 						Signature:          sig,
 						OcspStapling:       ocsp,
 						RevocationDetail:   revokers(cert),
+						Version:            cert.Version,
+						IsCA:               cert.IsCA,
 					})
 
 		}
@@ -1210,8 +1217,8 @@ func (s ScanResult) ToString(config ScanConfig) (result string) {
 					result += "\t\tSubject Common names: " + cert.Subject.CommonName + "\n"
 					result += "\t\tAlternative names: " + strings.Join(cert.DNSNames, ", ") + "\n"
 					result += fmt.Sprintf("\t\tSerial Number: %x\n", cert.SerialNumber)
-					result += "\t\tValid from: " + cert.NotBefore.String() + "\n"
-					result += "\t\tValid until: " + cert.NotAfter.String() + "\n"
+					result += "\t\tValid from: " + cert.NotBefore.UTC().Format(time.RFC1123) + "\n"
+					result += "\t\tValid until: " + cert.NotAfter.UTC().Format(time.RFC1123) + "\n"
 					result += fmt.Sprintf("\t\tVersion: %d\n", cert.Version)
 					result += "\t\tIssuer: " + cert.Issuer.String() + "\n"
 					result += "\t\tSignature algorithm: " + cert.SignatureAlgorithm.String() + "\n"
@@ -1225,7 +1232,7 @@ func (s ScanResult) ToString(config ScanConfig) (result string) {
 					if len(certs) > 1 {
 						for i := 0; i < len(certs); i++ {
 							c := certs[i]
-							result += fmt.Sprintf("\t\t\tChain %d (CA: %t): %s. (Expires: %s)\n", len(certs)-i-1, c.IsCA, c.Subject.String(), c.NotAfter.String())
+							result += fmt.Sprintf("\t\t\tChain %d (CA: %t): %s. (Expires: %s)\n", len(certs)-i-1, c.IsCA, c.Subject.String(), c.NotAfter.UTC().Format(time.RFC1123))
 						}
 					}
 				}
