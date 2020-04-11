@@ -130,7 +130,7 @@ func StreamScan(day, scanID string, callback func(progress, total int, results [
 //Humanise turns ScanResults to HumanScabResults
 func Humanise(in []tlsmodel.ScanResult) (out []tlsmodel.HumanScanResult) {
 	for _, r := range in {
-		out = append(out, r.ToStringStruct())
+		out = append(out, r.ToHumanScanResult())
 	}
 	return
 }

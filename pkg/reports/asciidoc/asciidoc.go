@@ -47,23 +47,32 @@ var (
 
 	rgbaFix  = regexp.MustCompile(`rgba\((\d+,\d+,\d+),1.0\)`)
 	redStyle = chart.Style{
-		FillColor:   drawing.ColorRed,
-		StrokeColor: drawing.ColorRed,
+		FillColor:   drawing.ColorFromHex("dc143c"), //crimson
+		StrokeColor: drawing.ColorFromHex("dc143c"), //crimson
 		StrokeWidth: 0,
+		FontColor:   drawing.ColorWhite,
 	}
 	amberStyle = chart.Style{
-		FillColor:   drawing.ColorFromHex("ffbf00"), //Amber
-		StrokeColor: drawing.ColorFromHex("ffbf00"),
+		FillColor:   drawing.ColorFromHex("ff8c00"), //darkorange
+		StrokeColor: drawing.ColorFromHex("ff8c00"),
 		StrokeWidth: 0,
+		FontColor:   drawing.ColorWhite,
 	}
 	greenStyle = chart.Style{
-		FillColor:   drawing.ColorFromHex("008000"), //green
-		StrokeColor: drawing.ColorFromHex("008000"),
+		FillColor:   drawing.ColorFromHex("006400"), //darkgreen
+		StrokeColor: drawing.ColorFromHex("006400"),
 		StrokeWidth: 0,
+		FontColor:   drawing.ColorWhite,
 	}
 	blueStyle = chart.Style{
 		FillColor:   drawing.ColorBlue,
 		StrokeColor: drawing.ColorBlue,
+		StrokeWidth: 0,
+		FontColor:   drawing.ColorWhite,
+	}
+	invisibleStyle = chart.Style{
+		FillColor:   drawing.ColorWhite,
+		StrokeColor: drawing.ColorWhite,
 		StrokeWidth: 0,
 	}
 )
@@ -221,6 +230,7 @@ func styleGrade(grade string) chart.Style {
 }
 
 func styleScore(score int) chart.Style {
+	// st := redStyle
 	if score >= 90 {
 		return greenStyle
 	} else if score >= 70 {
@@ -240,55 +250,137 @@ func createScanCharts(scans []tlsmodel.HumanScanResult) ([]string, []string) {
 	}
 
 	for _, s := range scans {
-		graph := chart.BarChart{
-			Width:  200,
-			Height: 350,
-			Canvas: chart.Style{
-				Padding: chart.Box{
-					Bottom: 50,
-				},
-			},
-			XAxis: chart.Style{
-				TextVerticalAlign:   chart.TextVerticalAlignMiddle,
-				TextHorizontalAlign: chart.TextHorizontalAlignLeft,
-				TextRotationDegrees: -90,
 
-				Padding: chart.Box{
-					Right: 50,
-				},
-				FillColor: chart.ColorAlternateBlue,
-			},
+		// graph := chart.BarChart{
+		// 	Width:  200,
+		// 	Height: 350,
+		// 	Canvas: chart.Style{
+		// 		Padding: chart.Box{
+		// 			Bottom: 50,
+		// 		},
+		// 	},
+		// 	XAxis: chart.Style{
+		// 		TextVerticalAlign: chart.TextVerticalAlignMiddle,
+		// 		// TextHorizontalAlign: chart.TextHorizontalAlignRight,
+		// 		TextRotationDegrees: -90,
+		// 		FontSize:            5,
+		// 	},
+		// 	Title: "Rating Breakdown",
+		// 	Background: chart.Style{
+		// 		Padding: chart.Box{
+		// 			Top: 40,
+		// 		},
+		// 	},
+		// 	BarWidth:   15,
+		// 	BarSpacing: 15,
+		// 	YAxis: chart.YAxis{
+		// 		Range: &chart.ContinuousRange{
+		// 			Max: 100,
+		// 			Min: 0,
+		// 		},
+		// 		ValueFormatter: func(v interface{}) string {
+		// 			if x, ok := v.(float64); ok {
+		// 				return fmt.Sprintf("%d", int64(x))
+		// 			}
+		// 			return fmt.Sprintf("%v", v)
+		// 		},
+		// 		Style: chart.Style{
+		// 			FontSize: 5,
+		// 		},
+		// 	},
+		// 	Bars: []chart.Value{
+		// 		{Value: float64(s.Score.CertificateScore), Style: styleScore(s.Score.CertificateScore), Label: "Certificate"},
+		// 		{Value: float64(s.Score.ProtocolScore), Style: styleScore(s.Score.ProtocolScore), Label: "Protocol Support"},
+		// 		{Value: float64(s.Score.KeyExchangeScore), Style: styleScore(s.Score.KeyExchangeScore), Label: "Key Exchange"},
+		// 		{Value: float64(s.Score.CipherEncryptionScore), Style: styleScore(s.Score.CipherEncryptionScore), Label: "Cipher Strength"},
+		// 	},
+		// }
+
+		barWidth := 20
+
+		graph := chart.StackedBarChart{
 			Title: "Rating Breakdown",
 			Background: chart.Style{
 				Padding: chart.Box{
 					Top: 40,
 				},
+				FillColor: chart.ColorAlternateBlue,
 			},
-			BarWidth:   15,
-			BarSpacing: 15,
-			YAxis: chart.YAxis{
-				Range: &chart.ContinuousRange{
-					Max: 100,
-					Min: 0,
-				},
-				ValueFormatter: func(v interface{}) string {
-					if x, ok := v.(float64); ok {
-						return fmt.Sprintf("%d", int64(x))
-					}
-					return fmt.Sprintf("%v", v)
-				},
+			Width:        600,
+			Height:       300,
+			BarSpacing:   15,
+			IsHorizontal: true,
+			XAxis:        chart.Shown(),
+			YAxis: chart.Style{
+				TextHorizontalAlign: chart.TextHorizontalAlignRight,
 			},
-			Bars: []chart.Value{
-				{Value: float64(s.Score.CertificateScore), Style: styleScore(s.Score.CertificateScore), Label: "Certificate"},
-				{Value: float64(s.Score.ProtocolScore), Style: styleScore(s.Score.ProtocolScore), Label: "Protocol Support"},
-				{Value: float64(s.Score.KeyExchangeScore), Style: styleScore(s.Score.KeyExchangeScore), Label: "Key Exchange"},
-				{Value: float64(s.Score.CipherEncryptionScore), Style: styleScore(s.Score.CipherEncryptionScore), Label: "Cipher Strength"},
+			Bars: []chart.StackedBar{
+				{
+					Name:  "Certificate",
+					Width: barWidth,
+					Values: []chart.Value{
+						{
+							Value: float64(100 - s.Score.CertificateScore),
+							Style: invisibleStyle,
+						},
+						{
+							Label: fmt.Sprintf("%d%s", s.Score.CertificateScore, "%"),
+							Value: float64(s.Score.CertificateScore),
+							Style: styleScore(s.Score.CertificateScore),
+						},
+					},
+				},
+				{
+					Name:  "Protocol Support",
+					Width: barWidth,
+					Values: []chart.Value{
+						{
+							Value: float64(100 - s.Score.ProtocolScore),
+							Style: invisibleStyle,
+						},
+						{
+							Label: fmt.Sprintf("%d%s", s.Score.ProtocolScore, "%"),
+							Value: float64(s.Score.ProtocolScore),
+							Style: styleScore(s.Score.ProtocolScore),
+						},
+					},
+				},
+				{
+					Name:  "Key Exchange",
+					Width: barWidth,
+					Values: []chart.Value{
+						{
+							Value: float64(100 - s.Score.KeyExchangeScore),
+							Style: invisibleStyle,
+						},
+						{
+							Label: fmt.Sprintf("%d%s", s.Score.KeyExchangeScore, "%"),
+							Value: float64(s.Score.KeyExchangeScore),
+							Style: styleScore(s.Score.KeyExchangeScore),
+						},
+					},
+				},
+				{
+					Name:  "Cipher Strength",
+					Width: barWidth,
+					Values: []chart.Value{
+						{
+							Value: float64(100 - s.Score.CipherEncryptionScore),
+							Style: invisibleStyle,
+						},
+						{
+							Label: fmt.Sprintf("%d%s", s.Score.CipherEncryptionScore, "%"),
+							Value: float64(s.Score.CipherEncryptionScore),
+							Style: styleScore(s.Score.CipherEncryptionScore),
+						},
+					},
+				},
 			},
 		}
+
 		buffer := bytes.NewBuffer([]byte{})
 		_ = graph.Render(chart.SVG, buffer)
 		c := fixSVGColour(buffer.String())
-
 		chart, err := generateFile([]byte(c), "tlsaudit_chart.*.svg")
 		files = append(files, chart)
 		charts = append(charts, chart)
@@ -396,11 +488,11 @@ func generateAssets(grade string, charts ...string) (assetFiles, error) {
 func colourGrade(grade string) string {
 	switch grade {
 	case "A", "A+":
-		return "green"
+		return "darkgreen"
 	case "B", "B+", "C":
-		return "gold"
+		return "darkorange"
 	default:
-		return "red"
+		return "crimson"
 	}
 }
 
@@ -488,19 +580,41 @@ func describeCerts(certs []tlsmodel.HumanCertificate) (d []string) {
 
 func generateCipherTable(scan tlsmodel.HumanScanResult) (out string) {
 	for _, proto := range scan.SupportedProtocols {
+		temp := fmt.Sprintf(`| 3+| pass:a[<color rgb="{blue}">Supports secure renegotiation: %t</color>] `, scan.SecureRenegotiationSupportedByProtocol[proto])
+		temp += fmt.Sprintf(`| 3+| pass:a[<color rgb="{blue}">Application Layer Protocol Negotiation: %s</color>] `, scan.ALPNByProtocol[proto])
+		temp += fmt.Sprintf(`| 3+| pass:a[<color rgb="{blue}">Has a cipher preference order: %t</color>] `, scan.HasCipherPreferenceOrderByProtocol[proto])
+		temp += fmt.Sprintf("2+h|Cipher h| Bits h| Grade ")
+		startTLS := ""
+		if scan.IsSTARTLS {
+			startTLS = " (STARTTLS)"
+		}
 		if ordered, present := scan.HasCipherPreferenceOrderByProtocol[proto]; present {
 			if ordered {
-				out += fmt.Sprintf(`2+| pass:a[<color rgb="{blue}">%s (suites in server-preferred order)</color>] `, proto)
+				out += fmt.Sprintf(`4+h| pass:a[<color rgb="{blue}">%s%s (suites in server-preferred order)</color>] `, proto, startTLS)
+				out += temp
 				for _, cipher := range scan.CipherPreferenceOrderByProtocol[proto] {
-					out += fmt.Sprintf("| [small]#%s# | \n ", cipher)
+					out += fmt.Sprintf("%s \n ", parseCipher(cipher))
 				}
 			} else {
-				out += fmt.Sprintf(`2+| pass:a[<color rgb="{blue}">%s (server has no suites order preference)</color>] `, proto)
+				out += fmt.Sprintf(`4+h| pass:a[<color rgb="{blue}">%s%s (server has no suites order preference)</color>] `, proto, startTLS)
+				out += temp
 				for _, cipher := range scan.CipherSuiteByProtocol[proto] {
-					out += fmt.Sprintf("| [small]#%s# | \n", cipher)
+					out += fmt.Sprintf("%s \n", parseCipher(cipher))
 				}
 			}
 		}
 	}
 	return
+}
+
+func parseCipher(c string) string {
+	cs := strings.Split(c, ",")
+	grade := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(cs[len(cs)-1]), "Grade "))
+	bits := strings.TrimSpace(strings.TrimSuffix(cs[1], "bits"))
+	fs := ""
+	if strings.Contains(c, "FS,") {
+		fs = " FS"
+	}
+	cipher := strings.TrimSpace(cs[0])
+	return fmt.Sprintf("2+| [small]#%s# | [small]#%s# | [small]#%s# ", cipher+fs, bits, grade)
 }

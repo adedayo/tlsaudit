@@ -12,8 +12,9 @@ var Report = `:title-page:
 :icons: font
 :listing-caption:
 :red: #ff0000
-:blue: #0000ff
+:blue: #19407c
 :green: #00ff00
+:brown: #a52a2a
 
 = TLS Audit Report: image:{{ .SALLogo }}[align=center, pdfwidth=0.2in] Server security audit 
 :source-highlighter: rouge
@@ -88,6 +89,7 @@ The following sections contain detailed description of results for each port tha
 
 {{ template "SCANHEADER" "Summary"}}
 
+{{ if .HumanScanResult.SupportsTLS }}
 [cols="2a,5a",%autowidth.stretch,frame=none,grid=none]
 |===
 ^.^|[cols="1",frame=none,grid=none]
@@ -95,8 +97,15 @@ The following sections contain detailed description of results for each port tha
 ^!Overall Grade
 a!image::{{ .Grade }}[align=center, pdfwidth=1.0in]
 !===
-|image::{{ .Chart }}[align=center, pdfwidth=4.0in]
+.^a|image::{{ .Chart }}[align=center, pdfwidth=4.0in]
 |===
+{{ else }}
+[cols="1a",frame=none,grid=none]
+|===
+^|Overall Grade 
+|image::{{ .Grade }}[align=center, pdfwidth=1.0in] 
+|===
+{{ end }}
 
 [NOTE] 
 .Advisories
@@ -109,6 +118,7 @@ a!image::{{ .Grade }}[align=center, pdfwidth=1.0in]
 
 <<<
 
+{{ if .HumanScanResult.SupportsTLS }}
 
 {{ range $index, $certs := getCerts .HumanScanResult }}
 '''
@@ -143,7 +153,7 @@ a!image::{{ .Grade }}[align=center, pdfwidth=1.0in]
 
 
 {{ template "SCANHEADER" "Configuration" }}
-[cols="1",options="header",frame=none,grid=none,stripes=even]
+[cols="1",frame=none,grid=none,stripes=even]
 |===
 |Supported Protocols
 {{ range $i, $proto := .SupportedProtocols }}
@@ -153,21 +163,21 @@ a!image::{{ .Grade }}[align=center, pdfwidth=1.0in]
 
 '''
 
-[cols="5,1",options="header",frame=none,grid=none,stripes=even]
+[cols="2a,a,a,a",frame=none,grid=none,%autowidth.stretch,stripes=even]
 |===
-2+|Cipher Suites
+4+|Cipher Suites
 {{ generateCipherTable .HumanScanResult }}
 |===
 
 
 <<<
 {{ end }}
-
+{{ end }}
 
 {{ define "SCANHEADER" }}
 [cols="a^.^",%autowidth.stretch,stripes=odd]
 |===
-|[big]*{{ . }}*
+h| [big]*pass:a[<color rgb="{blue}">{{ . }}</color>]*
 |===
 {{ end }}
 `

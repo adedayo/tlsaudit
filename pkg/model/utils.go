@@ -122,6 +122,8 @@ func InterpretGrade(grade string) string {
 		return "Strong commercial security"
 	case grade == "A+":
 		return "Exceptional security configuration. Well done!"
+	case grade == "D":
+		return "Configuration with security issues that are typically difficult or unlikely to be exploited, but can and should be addressed"
 	default:
 		return "Unused grade"
 	}

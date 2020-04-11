@@ -589,6 +589,7 @@ func getCipherConfig13(cipher uint16) (config CipherConfig, err error) {
 		config.Cipher = cipherName
 		config.KeyExchange = tls13KeyExchange
 		config.Authentication = tls13KeyExchange
+		config.SupportsForwardSecrecy = true // always the case for TLS v1.3
 		cipherName = strings.TrimPrefix(cipherName, "TLS_")
 		//set these values temporarily
 		config.MACPRF = tls13KeyExchange
@@ -1032,8 +1033,8 @@ func getCurve(protocol, cipher uint16, scan ScanResult) string {
 	return fmt.Sprintf("%s (0x%x) %s", tlsdefs.CipherSuiteMap[cipher], cipher, curveID)
 }
 
-//ToStringStruct returns a string-decoded form of ScanResult
-func (s ScanResult) ToStringStruct() (out HumanScanResult) {
+//ToHumanScanResult returns a string-decoded form of ScanResult
+func (s ScanResult) ToHumanScanResult() (out HumanScanResult) {
 	out.GroupID = s.GroupID
 	out.Server = s.Server
 	out.HostName = s.HostName
@@ -1080,7 +1081,7 @@ func (s ScanResult) ToStringStruct() (out HumanScanResult) {
 	for k, v := range s.CipherSuiteByProtocol {
 		ciphers := []string{}
 		for _, c := range v {
-			ciphers = append(ciphers, fmt.Sprintf("%s,%s", getCurve(k, c, s), scoreCipher(c, k, s)))
+			ciphers = append(ciphers, fmt.Sprintf("%s, %s", getCurve(k, c, s), scoreCipher(c, k, s)))
 		}
 		out.CipherSuiteByProtocol[tlsdefs.TLSVersionMap[k]] = ciphers
 	}
@@ -1154,7 +1155,7 @@ func revokers(cert *x509.Certificate) string {
 
 //ToJSON returns a JSON-formatted string representation of the ScanResult
 func (s ScanResult) ToJSON() (js string) {
-	if data, err := json.Marshal(s.ToStringStruct()); err == nil {
+	if data, err := json.Marshal(s.ToHumanScanResult()); err == nil {
 		return string(data)
 	}
 	return
@@ -1313,8 +1314,8 @@ func scoreProtocol(protocol uint16) (score int) {
 //SecurityScore contains the overall grading of a TLS/SSL port
 func (score *SecurityScore) adjustScore2009p(scan ScanResult) {
 
-	if !supportsTLS12(scan) {
-		cap(score, "C", "TLS v1.2 not suported")
+	if !supportsTLS12OrAbove(scan) {
+		cap(score, "C", "TLS v1.2 or above not supported")
 	}
 
 	if supportsSSLV3(scan) {
@@ -1322,11 +1323,11 @@ func (score *SecurityScore) adjustScore2009p(scan ScanResult) {
 	}
 
 	if !supportsPFS(scan) {
-		cap(score, "B", "Forward Secrecy not suported")
+		cap(score, "B", "Forward Secrecy not supported")
 	}
 
 	if !supportsAEAD(scan) {
-		cap(score, "B", "Authenticated Encryption (AEAD) not suported")
+		cap(score, "B", "Authenticated Encryption (AEAD) not supported")
 	}
 
 	if supportsAnonAuth(scan) {
@@ -1351,8 +1352,8 @@ func (score *SecurityScore) adjustScore2009q(scan ScanResult) {
 		cap(score, "B", "Supports TLS v1.1 or TLS v1.0")
 	}
 
-	if !supportsTLS12(scan) {
-		cap(score, "C", "TLS v1.2 not suported")
+	if !supportsTLS12OrAbove(scan) {
+		cap(score, "C", "TLS v1.2 or above not supported")
 	}
 
 	if supportsSSLV3(scan) {
@@ -1360,11 +1361,11 @@ func (score *SecurityScore) adjustScore2009q(scan ScanResult) {
 	}
 
 	if !supportsPFS(scan) {
-		cap(score, "B", "Forward Secrecy not suported")
+		cap(score, "B", "Forward Secrecy not supported")
 	}
 
 	if !supportsAEAD(scan) {
-		cap(score, "B", "Authenticated Encryption (AEAD) not suported")
+		cap(score, "B", "Authenticated Encryption (AEAD) not supported")
 	}
 
 	if supportsAnonAuth(scan) {
@@ -1457,9 +1458,9 @@ func cap(score *SecurityScore, grade, reason string) {
 	}
 }
 
-func supportsTLS12(scan ScanResult) (yes bool) {
+func supportsTLS12OrAbove(scan ScanResult) (yes bool) {
 	for _, p := range scan.SupportedProtocols {
-		if p == tls.VersionTLS12 {
+		if p >= tls.VersionTLS12 {
 			yes = true
 			break
 		}
@@ -1638,9 +1639,16 @@ func selectMinimalKeyExchangeScore(cipher, protocol uint16, keyExchangeScore, ci
 
 func scoreCipher(cipher, protocol uint16, scan ScanResult) (score string) {
 	if cc, err := GetCipherConfig(cipher); err == nil {
+		if cc.Cipher == "TLS_NULL_WITH_NULL_NULL" {
+			return fmt.Sprintf("0 bits, Grade F")
+		}
+		fs := ""
+		if cc.SupportsForwardSecrecy {
+			fs = "FS, "
+		}
 		s := (40*mapEncKeyLengthToScore(cc.GetEncryptionKeyLength()) + 30*scoreProtocol(protocol) +
 			30*mapKeyExchangeKeylengthToScore(cc.GetKeyExchangeKeyLength(cipher, protocol, scan))) / 100
-		return toTLSGrade(s)
+		return fmt.Sprintf("%d bits, %sGrade %s", cc.GetEncryptionKeyLength(), fs, toTLSGrade(s))
 	}
 	return
 }
