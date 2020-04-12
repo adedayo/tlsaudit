@@ -1448,7 +1448,7 @@ func adjustUsingCertificateSecurity(score *SecurityScore, scan ScanResult) {
 
 //SecurityScore contains the overall grading of a TLS/SSL port
 func cap(score *SecurityScore, grade, reason string) {
-	score.Warnings = append(score.Warnings, fmt.Sprintf("%s. Grade capped to %s", reason, grade))
+	score.Warnings = append(score.Warnings, fmt.Sprintf("%s. Grade capped to or below %s", reason, grade))
 	if grade == "T" && score.OrderGrade(score.Grade) > score.OrderGrade("T") {
 		score.Grade = "T" + score.Grade
 	} else if strings.HasPrefix(score.Grade, "T") && score.OrderGrade(score.Grade) > score.OrderGrade("T"+grade) {
