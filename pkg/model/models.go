@@ -1271,7 +1271,7 @@ func (s ScanResult) String() string {
 	return s.ToString(ScanConfig{})
 }
 
-//CalculateScore computes an SSLLab-esque score for the scan
+//CalculateScore computes an SSLLabs-esque score for the scan
 // https://github.com/ssllabs/research/wiki/SS
 // https://community.qualys.com/docs/DOC-6321-ssl-labs-grading-2018
 //SecurityScoreL-Server-Rating-Guide contains the overall grading of a TLS/SSL port
@@ -1328,7 +1328,7 @@ func scoreProtocol(protocol uint16) (score int) {
 }
 
 //SecurityScore contains the overall grading of a TLS/SSL port
-func (score *SecurityScore) adjustScore2009p(scan ScanResult) {
+func adjustScore2009p(score *SecurityScore, scan ScanResult) {
 
 	if !supportsTLS12OrAbove(scan) {
 		cap(score, "C", "TLS v1.2 or above not supported")
@@ -1362,40 +1362,10 @@ func (score *SecurityScore) adjustScore2009p(scan ScanResult) {
 }
 
 //SecurityScore contains the overall grading of a TLS/SSL port
-func (score *SecurityScore) adjustScore2009q(scan ScanResult) {
-
+func adjustScore2009q(score *SecurityScore, scan ScanResult) {
+	adjustScore2009p(score, scan)
 	if supportsTLS10Or11(scan) {
 		cap(score, "B", "Supports TLS v1.1 or TLS v1.0")
-	}
-
-	if !supportsTLS12OrAbove(scan) {
-		cap(score, "C", "TLS v1.2 or above not supported")
-	}
-
-	if supportsSSLV3(scan) {
-		cap(score, "C", "Supports SSL v3. Vulnerable to POODLE attack")
-	}
-
-	if !supportsPFS(scan) {
-		cap(score, "B", "Forward Secrecy not supported")
-	}
-
-	if !supportsAEAD(scan) {
-		cap(score, "B", "Authenticated Encryption (AEAD) not supported")
-	}
-
-	if supportsAnonAuth(scan) {
-		cap(score, "F", "Server supports anonymous (insecure) suites")
-	}
-
-	adjustUsingCertificateSecurity(score, scan)
-
-	if scan.SupportsTLSFallbackSCSV {
-		if score.Grade == "A" {
-			score.Grade = "A+"
-		} else if score.Grade == "TA" {
-			score.Grade = "TA+"
-		}
 	}
 }
 

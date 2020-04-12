@@ -109,7 +109,7 @@ func makeAdvisory(example tlsmodel.GradeExample) []string {
 func GenerateReport(summary tlsmodel.ScanResultSummary, results []tlsmodel.HumanScanResult, version string) (reportPath string, err error) {
 	asciidocPath, err := exec.LookPath(asciidocExec)
 	if err != nil {
-		return reportPath, fmt.Errorf("%s executable file not found in your $PATH. Install it and ensure that it is in your $PATH", asciidocExec)
+		return reportPath, fmt.Errorf("Cannot generate PDF report because %s executable file not found in your $PATH. Install it and ensure that it is in your $PATH", asciidocExec)
 	}
 
 	//theme
