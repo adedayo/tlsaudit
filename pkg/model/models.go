@@ -802,6 +802,18 @@ type SecurityScore struct {
 	Warnings              []string
 }
 
+func (s *SecurityScore) makeWarningsUnique() {
+	m := make(map[string]bool)
+	ww := []string{}
+	for _, w := range s.Warnings {
+		if _, present := m[w]; !present {
+			ww = append(ww, w)
+			m[w] = true
+		}
+	}
+	s.Warnings = ww
+}
+
 //OrderGrade allows a simple numeric ordering of TLS grades. Actual values don't matter
 func (SecurityScore) OrderGrade(grade string) int {
 	switch grade {
@@ -954,6 +966,7 @@ type ScanResult struct {
 	IsSTARTLS                              bool
 	IsSSH                                  bool
 	SupportsTLSFallbackSCSV                bool
+	Score                                  SecurityScore
 	GroupID                                int //ScanRequest Host Group index
 }
 
@@ -1263,7 +1276,10 @@ func (s ScanResult) String() string {
 // https://community.qualys.com/docs/DOC-6321-ssl-labs-grading-2018
 //SecurityScoreL-Server-Rating-Guide contains the overall grading of a TLS/SSL port
 func (s *ScanResult) CalculateScore() SecurityScore {
-	return score2009q(s)
+	score := score2009q(s)
+	score.makeWarningsUnique()
+	s.Score = score
+	return score
 }
 
 func scoreCertificate(score *SecurityScore, scan *ScanResult) {
@@ -1408,7 +1424,7 @@ func adjustUsingCertificateSecurity(score *SecurityScore, scan ScanResult) {
 			case x509.ECDSA:
 				//See https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-57pt1r4.pdf for details pp 53 for comparable key strengths
 				if pk, ok := publicKey.(*ecdsa.PublicKey); ok {
-					bitlength := pk.Y.BitLen()
+					bitlength := pk.X.BitLen()
 					switch {
 					case bitlength >= 224 && bitlength < 255:
 						cap(score, "B", fmt.Sprintf("ECDSA Public key length is %d (< 255)", bitlength))
@@ -1438,7 +1454,7 @@ func adjustUsingCertificateSecurity(score *SecurityScore, scan ScanResult) {
 			sigAlgo := cert.SignatureAlgorithm.String()
 			switch {
 			case strings.Contains(sigAlgo, "MD"): //cap MD2 and MD5 signatures to F
-				cap(score, "T", fmt.Sprintf("Insecure/Untrusted %s signature algorithm", sigAlgo))
+				cap(score, "F", fmt.Sprintf("Insecure/Untrusted %s signature algorithm", sigAlgo))
 			case strings.Contains(sigAlgo, "SHA1") || strings.Contains(sigAlgo, "SHA-1"):
 				cap(score, "T", fmt.Sprintf("Insecure/Untrusted %s signature algorithm", sigAlgo))
 			}
