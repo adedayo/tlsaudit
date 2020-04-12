@@ -33,6 +33,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"sort"
@@ -100,11 +101,6 @@ func init() {
 }
 
 func runner(cmd *cobra.Command, args []string) error {
-	// if true {
-	// 	conf, _ := tlsmodel.GetCipherConfig(0xc019)
-	// 	fmt.Printf("%#v", conf)
-	// 	return nil
-	// }
 
 	if cmd.Flag("show-cipher-metrics").Changed {
 		println("Showing cipher metrics")
@@ -212,7 +208,7 @@ func runner(cmd *cobra.Command, args []string) error {
 		}
 		paths, err := asciidoc.GenerateReport(summary, results, appVersion)
 		if err != nil {
-			panic(err)
+			log.Fatal(err)
 		}
 
 		println("Report: ", paths)

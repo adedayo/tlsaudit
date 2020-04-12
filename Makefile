@@ -1,6 +1,8 @@
+BUILDFLAGS := -trimpath 
 ifeq ($(OS),Windows_NT)
 	BUILDFLAGS += ""
 else 
+	GOPATH := $(shell cd ../../../.. ; pwd)
 	UNAME_S := $(shell uname -s)
 	VERSION_TAG := $(shell git describe --abbrev=0 --tags)
 	OUTFILE := "tlsaudit_$(VERSION_TAG)_$(UNAME_S)_x86_64.tar.gz"
