@@ -1314,11 +1314,11 @@ func scoreProtocol(protocol uint16) (score int) {
 	case tlsdefs.VersionSSL20:
 		score = 0
 	case tls.VersionSSL30:
-		score = 0 // pegged down from 80
+		score = 80
 	case tls.VersionTLS10:
-		score = 70 // pegged down from 90
+		score = 90
 	case tls.VersionTLS11:
-		score = 85 // pegged down from 95
+		score = 95
 	case tls.VersionTLS12:
 		score = 100
 	case tls.VersionTLS13:
@@ -1329,6 +1329,18 @@ func scoreProtocol(protocol uint16) (score int) {
 
 //SecurityScore contains the overall grading of a TLS/SSL port
 func adjustScore2009p(score *SecurityScore, scan ScanResult) {
+
+	if score.CipherEncryptionScore == 0 {
+		cap(score, "F", "Cipher encryption score is zero")
+	}
+
+	if score.ProtocolScore == 0 {
+		cap(score, "F", "Protocol score is zero")
+	}
+
+	if score.KeyExchangeScore == 0 {
+		cap(score, "F", "Key exchange score is zero")
+	}
 
 	if !supportsTLS12OrAbove(scan) {
 		cap(score, "C", "TLS v1.2 or above not supported")
@@ -1605,38 +1617,64 @@ func mapEncKeyLengthToScore(kl int) (score int) {
 	return
 }
 
-func selectMinimalKeyExchangeScore(cipher, protocol uint16, keyExchangeScore, cipherStrengthMinScore, cipherStrengthMaxScore *int, scan ScanResult) {
+func selectMinimalKeyExchangeScore(cipher, protocol uint16, keyExchangeMinScore, keyExchangeMaxScore, cipherStrengthMinScore, cipherStrengthMaxScore *int, scan ScanResult) {
 	if cc, err := GetCipherConfig(cipher); err == nil {
+
 		kl := cc.GetKeyExchangeKeyLength(cipher, protocol, scan)
-		if score := mapKeyExchangeKeylengthToScore(kl); score < *keyExchangeScore {
-			*keyExchangeScore = score
+		score := mapKeyExchangeKeylengthToScore(kl)
+		if *keyExchangeMinScore > score {
+			*keyExchangeMinScore = score
 		}
+		if *keyExchangeMaxScore < score {
+			*keyExchangeMaxScore = score
+		}
+
 		ks := cc.GetEncryptionKeyLength()
-		score := mapEncKeyLengthToScore(ks)
+		score = mapEncKeyLengthToScore(ks)
 		if *cipherStrengthMinScore > score {
 			*cipherStrengthMinScore = score
 		}
-
 		if *cipherStrengthMaxScore < score {
 			*cipherStrengthMaxScore = score
 		}
 	}
 }
 
+//scoreCipher is a cipher scoring algorithm using these properties:
+// Key exchange score = 40%
+// Forward secrecy = 30%
+// Symmetric Encryption keylength = 30%
 func scoreCipher(cipher, protocol uint16, scan ScanResult) (score string) {
 	if cc, err := GetCipherConfig(cipher); err == nil {
 		if cc.Cipher == "TLS_NULL_WITH_NULL_NULL" {
 			return fmt.Sprintf("0 bits, Grade F")
 		}
 		fs := ""
+		fsScore := 0
 		if cc.SupportsForwardSecrecy {
 			fs = "FS, "
+			fsScore = 100
 		}
-		s := (40*mapEncKeyLengthToScore(cc.GetEncryptionKeyLength()) + 30*scoreProtocol(protocol) +
-			30*mapKeyExchangeKeylengthToScore(cc.GetKeyExchangeKeyLength(cipher, protocol, scan))) / 100
-		return fmt.Sprintf("%d bits, %sGrade %s", cc.GetEncryptionKeyLength(), fs, toTLSGrade(s))
+		s := (30*mapEncKeyLengthToScore(cc.GetEncryptionKeyLength()) + 30*fsScore +
+			40*mapKeyExchangeKeylengthToScore(cc.GetKeyExchangeKeyLength(cipher, protocol, scan))) / 100
+		return fmt.Sprintf("%d bits, %s%sGrade %s", cc.GetEncryptionKeyLength(), fs, annotateWeak(cc), toTLSGrade(s))
 	}
 	return
+}
+
+func annotateWeak(cc CipherConfig) string {
+	weak := "Weak, "
+	switch {
+	case strings.Contains(cc.Cipher, "RC"): //RC4, RC2
+		return weak
+	case strings.Contains(cc.Cipher, "DES"): //DES, 3DES
+		return weak
+	case strings.Contains(cc.Cipher, "CBC"): // https://www.tripwire.com/state-of-security/vert/tls-cbc-padding-oracles/
+		return weak
+	case strings.Contains(cc.KeyExchange, "RSA"):
+		return weak
+	}
+	return ""
 }
 
 //TLSAuditConfig is the configuration of the nmap runner

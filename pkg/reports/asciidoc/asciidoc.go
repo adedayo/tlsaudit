@@ -615,6 +615,10 @@ func parseCipher(c string) string {
 	if strings.Contains(c, "FS,") {
 		fs = " FS"
 	}
+	weak := ""
+	if strings.Contains(c, "Weak,") {
+		weak = " Weak"
+	}
 	cipher := strings.TrimSpace(cs[0])
-	return fmt.Sprintf("2+| [small]#%s# | [small]#%s# | [small]#%s# ", cipher+fs, bits, grade)
+	return fmt.Sprintf("2+| [small]#%s# | [small]#%s# | [small]#%s# ", cipher+fs+weak, bits, grade)
 }

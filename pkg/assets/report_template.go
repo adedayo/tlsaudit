@@ -163,7 +163,7 @@ a!image::{{ .Grade }}[align=center, pdfwidth=1.0in]
 
 '''
 
-[cols="2a,a,a,a",frame=none,grid=none,%autowidth.stretch,stripes=even]
+[cols="2a,a,a,a",frame=none,grid=cols,%autowidth.stretch,stripes=even]
 |===
 4+|Cipher Suites
 {{ generateCipherTable .HumanScanResult }}

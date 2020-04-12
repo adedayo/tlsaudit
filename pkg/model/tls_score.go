@@ -22,6 +22,13 @@ func score2009q(s *ScanResult) (result SecurityScore) {
 	return
 }
 
+//computeBasicScore tries to mimic SSLLabs scoring system (although the algorithm description is not really clear).
+//see https://github.com/ssllabs/research/wiki/SSL-Server-Rating-Guide
+//the following is the interpretation:
+//protocol score = (max_protocol_score + min_protocol_score)/2
+//key exchange score = (max_keyExchange_score + min_keyExchange_score)/2 <- this piece is not well-specified
+//cipher strength score = (max_cipher_strength_score + min_cipher_strength_score)/2
+//Basic score = 30% protocol score + 30% key exchange score + 40% cipher strength score
 func computeBasicScore(s *ScanResult) (result SecurityScore) {
 	max := uint16(0)
 	min := uint16(1000)
@@ -39,13 +46,14 @@ func computeBasicScore(s *ScanResult) (result SecurityScore) {
 
 	result.ProtocolScore = (highProtocol + lowProtocol) / 2
 
-	cipherKeyExchangeScore := 1000
+	keyExchangeMinScore := 1000
+	keyExchangeMaxScore := 0
 	cipherStrengthMinScore := 1000
 	cipherStrengthMaxScore := 0
 	// for _, p := range s.SupportedProtocols {
 	p := s.SupportedProtocols[0] // use the strongest protocol
-	c := s.SelectedCipherByProtocol[p]
-	selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
+	// cc := s.SelectedCipherByProtocol[p] //just pick a cipher starting point
+	// selectMinimalKeyExchangeScore(cc, p, &keyExchangeMinScore, &keyExchangeMaxScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
 	var cipherSuite []uint16
 	if s.HasCipherPreferenceOrderByProtocol[p] {
 		cipherSuite = s.CipherPreferenceOrderByProtocol[p]
@@ -53,11 +61,11 @@ func computeBasicScore(s *ScanResult) (result SecurityScore) {
 		cipherSuite = s.CipherSuiteByProtocol[p]
 	}
 	for _, c := range cipherSuite {
-		selectMinimalKeyExchangeScore(c, p, &cipherKeyExchangeScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
+		selectMinimalKeyExchangeScore(c, p, &keyExchangeMinScore, &keyExchangeMaxScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
 	}
 	// }
 
-	result.KeyExchangeScore = cipherKeyExchangeScore
+	result.KeyExchangeScore = (keyExchangeMaxScore + keyExchangeMinScore) / 2
 
 	result.CipherEncryptionScore = (cipherStrengthMaxScore + cipherStrengthMinScore) / 2
 
