@@ -31,6 +31,17 @@ tlsaudit --json 8.8.8.8 192.168.2.5/30 10.11.12.13:443/31
 ```
 Depending on the fidelity of the network being scanned or the size of CIDR ranges, it may be expedient to adjust the scan timeout and the number of packets per second to send during the open port discovery phase. Several scanning options are available. See the options from the commandline help.
 
+### Generating pretty PDF report
+
+TLSAudit can now generate PDF reports of your scan to share with auditors or whoever may be interested in details of your server configuration.
+Use the `--report` command-line flag or the shorthand `-r`
+
+```bash
+tlsaudit --report cloudflare.com:443
+```
+
+This generates a report similar to the following: [cloudflare.pdf](https://github.com/adedayo/tlsaudit/cloudflare.pdf)
+
 ### Command line options
 
 ```bash
@@ -51,11 +62,12 @@ Flags:
   -o, --output string[="tlsaudit.txt"]                      write results into an output FILE (default "tlsaudit.txt")
   -p, --protocols-only                                      only check supported protocols - will not do detailed checks on supported ciphers (default: false)
   -q, --quiet                                               control whether to produce a running commentary of progress or stay quiet till the end (default: false)
-  -r, --rate int                                            the rate (in packets per second) that we should use to scan for open ports (default 1000)
+      --rate int                                            the rate (in packets per second) that we should use to scan for open ports (default 1000)
+  -r, --report                                              generate a PDF report of the scan. Requires asciidoctor-pdf installed (default: false)
   -s, --service string[="data/config/TLSAuditConfig.yml"]   run tlsaudit as a service (default "data/config/TLSAuditConfig.yml")
   -m, --show-cipher-metrics                                 enumerate all ciphers and show associated security and performance metrics (default: false)
   -t, --timeout int                                         TIMEOUT (in seconds) to adjust how much we are willing to wait for servers to come back with responses. Smaller timeout sacrifices accuracy for speed (default 5)
-      --version                                             version for tlsaudit
+      --version                                             version for tlsaudit                                          version for tlsaudit
 ```
 
 ## An issue on macOS
