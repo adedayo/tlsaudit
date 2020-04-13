@@ -30,8 +30,6 @@ var (
 		}
 	}()
 
-	documentTheme = "tlsaudit-theme.yml"
-
 	funcMap = template.FuncMap{
 		"generateGradeTable":      generateGradeTable,
 		"generateGradeRangeTable": generateGradeRangeTable,
@@ -112,8 +110,6 @@ func GenerateReport(summary tlsmodel.ScanResultSummary, results []tlsmodel.Human
 		return reportPath, fmt.Errorf("Cannot generate PDF report because %s executable file not found in your $PATH. Install it and ensure that it is in your $PATH", asciidocExec)
 	}
 
-	//theme
-	generateFile([]byte(assets.Theme), documentTheme)
 	rr := []scanResult{}
 	scanGrades, charts := createScanCharts(results)
 	if err != nil {
@@ -410,7 +406,6 @@ func createScanCharts(scans []tlsmodel.HumanScanResult) ([]string, []string) {
 }
 
 func cleanAssets(assets reportModel, aDoc string) {
-	os.Remove(documentTheme)
 	os.Remove(assets.Logo)
 	os.Remove(assets.SALLogo)
 	os.Remove(assets.Chart)
