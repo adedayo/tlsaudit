@@ -11,8 +11,12 @@ github.com/adedayo/cidr v0.1.5/go.mod h1:By6g82fmUcv8/Z/6JcDs1D4wO4gc/Ookb842bVC
 github.com/adedayo/tcpscan v0.3.4/go.mod h1:V4BbfuzhchhRXT/uyJiNxysE4nadq2t6kfXdFJkXQ2k=
 github.com/adedayo/tcpscan v0.5.8 h1:5o6BIYLlAlwxI8EZJM6/v6xqrgkNrcPwT80DgYWuLWc=
 github.com/adedayo/tcpscan v0.5.8/go.mod h1:Ig+qcGrjAs5iEGdxiWCVcyqMDSqZlcl9TjAsenyReic=
+github.com/adedayo/tcpscan v0.5.9 h1:9IVFPgAfOcPVWiev66bCzd7b4xkAuHN7qwyCT3OdFn8=
+github.com/adedayo/tcpscan v0.5.9/go.mod h1:jEF10ouX5K4paSdMsAcIAfcAU9u0rL57lFcpWHmaDBs=
 github.com/adedayo/tls-definitions v0.0.2 h1:TS+J1UwmZpbF3a/82Ahr4L0WluG8rjv5soeAPccjG1M=
 github.com/adedayo/tls-definitions v0.0.2/go.mod h1:gMvNG/ngGUR7D56FeXy6hvkheV95CuTPiv7OfZCWHCM=
+github.com/adedayo/tls-definitions v0.0.3 h1:jsfZVPE4qLVpOP3Re2sZbCUc8bPimm6121SvWuaRVHc=
+github.com/adedayo/tls-definitions v0.0.3/go.mod h1:gMvNG/ngGUR7D56FeXy6hvkheV95CuTPiv7OfZCWHCM=
 github.com/adedayo/tlsaudit v0.2.2/go.mod h1:qlilsuzRz/YHkPXQvhnKxLr0ROWQTEvLEihXq7nHAdk=
 github.com/airbrake/gobrake v3.6.1+incompatible/go.mod h1:wM4gu3Cn0W0K7GUuVWnlXZU11AGBXMILnrdOU8Kn00o=
 github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6/go.mod h1:grANhF5doyWs3UAsr3K4I6qtAmlQcZDesFNEHPZAzj8=

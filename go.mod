@@ -5,8 +5,8 @@ go 1.12
 require (
 	github.com/AndreasBriese/bbloom v0.0.0-20190825152654-46b345b51c96 // indirect
 	github.com/adedayo/cidr v0.1.5
-	github.com/adedayo/tcpscan v0.5.8
-	github.com/adedayo/tls-definitions v0.0.2
+	github.com/adedayo/tcpscan v0.5.9
+	github.com/adedayo/tls-definitions v0.0.3
 	github.com/blend/go-sdk v1.1.1 // indirect
 	github.com/carlescere/scheduler v0.0.0-20170109141437-ee74d2f83d82
 	github.com/dgraph-io/badger v2.0.0-rc2+incompatible
@@ -23,6 +23,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/sirupsen/logrus v1.4.0
 	github.com/spf13/cobra v0.0.5
+	github.com/stretchr/testify v1.3.0 // indirect
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/wcharczuk/go-chart v2.0.2-0.20191206192251-962b9abdec2b+incompatible
 	go.uber.org/atomic v1.4.0 // indirect
