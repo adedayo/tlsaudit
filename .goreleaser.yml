@@ -1,32 +1,33 @@
 builds:
-- main: ./cmd/tlsaudit/tlsaudit.go
-  env:
-    - CGO_ENABLED=1
-  goos: 
-    - darwin
-  goarch:
-    - amd64
+  - main: ./cmd/tlsaudit/tlsaudit.go
+    flags:
+      - -trimpath
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - darwin
+    goarch:
+      - amd64
 archives:
-    - id: darwin
-      replacements:
-        darwin: Darwin
-        amd64: x86_64
+  - id: darwin
+    replacements:
+      darwin: Darwin
+      amd64: x86_64
 checksum:
-  name_template: 'checksums.txt'
+  name_template: "checksums.txt"
 snapshot:
   name_template: "{{ .Tag }}-next"
 changelog:
   sort: asc
   filters:
     exclude:
-    - '^docs:'
-    - '^test:'
+      - "^docs:"
+      - "^test:"
 before:
-   hooks:
-   - go mod download
+  hooks:
+    - go mod download
 brews:
-  -
-    github:
+  - github:
       owner: adedayo
       name: homebrew-tap
     homepage: "https://github.com/adedayo/tlsaudit"
