@@ -6,6 +6,8 @@
 # TLSAudit 
 TLSAudit is a utility for auditing TLS (including SSL and STARTTLS) security settings. You can use it to enumerate protocols, ciphers and curves supported by an open TCP port. Scan entire CIDR ranges with TLSAudit to discover which ports are open and get details of the TLS configurations of the open ports. You can scan specific port ranges within CIDR ranges too, by using a format such as `tlsaudit 10.10.5.0:443/24`, which scans the entire CIDR range `10.10.5.0/24` but looking only at port `443`. 
 
+![TLS Audit Reporting](tlsaudit-report.png)
+
 ## Using it as a command-line tool
 TLSAudit is also available as a command-line tool. 
 
@@ -41,6 +43,8 @@ tlsaudit --report cloudflare.com:443
 ```
 
 This generates a report similar to the following: [cloudflare.pdf](cloudflare.pdf)
+
+_Note that reporting requires that asciidoctor-pdf, which is used to generate the report, is installed on your machine._ Details of obtaining the free tool is here: [Asciidoctor PDF documentation](https://asciidoctor.org/docs/asciidoctor-pdf/)
 
 ### Command line options
 
