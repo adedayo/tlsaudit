@@ -52,8 +52,6 @@ func computeBasicScore(s *ScanResult) (result SecurityScore) {
 	cipherStrengthMaxScore := 0
 	// for _, p := range s.SupportedProtocols {
 	p := s.SupportedProtocols[0] // use the strongest protocol
-	// cc := s.SelectedCipherByProtocol[p] //just pick a cipher starting point
-	// selectMinimalKeyExchangeScore(cc, p, &keyExchangeMinScore, &keyExchangeMaxScore, &cipherStrengthMinScore, &cipherStrengthMaxScore, *s)
 	var cipherSuite []uint16
 	if s.HasCipherPreferenceOrderByProtocol[p] {
 		cipherSuite = s.CipherPreferenceOrderByProtocol[p]
