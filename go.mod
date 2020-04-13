@@ -6,7 +6,7 @@ require (
 	github.com/AndreasBriese/bbloom v0.0.0-20190825152654-46b345b51c96 // indirect
 	github.com/adedayo/cidr v0.1.5
 	github.com/adedayo/tcpscan v0.5.9
-	github.com/adedayo/tls-definitions v0.0.3
+	github.com/adedayo/tls-definitions v0.0.4
 	github.com/blend/go-sdk v1.1.1 // indirect
 	github.com/carlescere/scheduler v0.0.0-20170109141437-ee74d2f83d82
 	github.com/dgraph-io/badger v2.0.0-rc2+incompatible

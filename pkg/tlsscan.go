@@ -57,8 +57,8 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 			if err != nil {
 				hostnames[originalDomain] = originalDomain
 			} else {
-				dom := domains[0] // just take the first hostname
-				hostnames[originalDomain] = dom
+				dom := domains[0]                                        // just take the first hostname.
+				hostnames[originalDomain] = strings.TrimSuffix(dom, ".") //trimming trailing dot. Do we need to?
 				originalDomain = dom
 			}
 		}
