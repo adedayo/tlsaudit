@@ -3,8 +3,18 @@
 ![GitHub release](https://img.shields.io/github/release/adedayo/tlsaudit.svg)
 [![GitHub license](https://img.shields.io/github/license/adedayo/tlsaudit.svg)](https://github.com/adedayo/tlsaudit/blob/master/LICENSE)
 
-# TLSAudit 
-TLSAudit is a utility for auditing TLS (including SSL and STARTTLS) security settings. You can use it to enumerate protocols, ciphers and curves supported by an open TCP port. Scan entire CIDR ranges with TLSAudit to discover which ports are open and get details of the TLS configurations of the open ports. You can scan specific port ranges within CIDR ranges too, by using a format such as `tlsaudit 10.10.5.0:443/24`, which scans the entire CIDR range `10.10.5.0/24` but looking only at port `443`. 
+# TLS Audit 
+TLS Audit is a *fast* utility for auditing TLS (including SSL and STARTTLS) security settings. You can use it to enumerate protocols, ciphers and curves supported by an open TCP port.
+
+* It combines port scanning with TLS Audits (disable port scanning with explicit port ranges)
+* Supports auditing of STARTTLS servers, e.g. email servers
+* Unlike excellent tools like SSL Labs server test, you can use TLS Audit to scan servers internal to your network that are not exposed to the public Internet - Scan your server before exposing them: avoid "testing in production"!
+* Scan entire CIDR ranges with TLS Audit to discover which ports are open and get details of the TLS configurations of the open ports.
+* Supports bulk scanning of your servers natively 
+* You can scan specific port ranges within CIDR ranges too, by using a format such as `tlsaudit 10.10.5.0:443/24`, which scans the entire CIDR range `10.10.5.0/24` but looking only at port `443`. 
+  * When port ranges are specified, the prior port scan is disabled, and only the explicitly specified ranges are examined for SSL/STARTTLS/TLS configuration
+* Generate nice-looking reports for your audit and compliance efforts with the PDF reporting feature
+
 
 ![TLS Audit Reporting](tlsaudit-report.png)
 
@@ -33,7 +43,7 @@ tlsaudit --json 8.8.8.8 192.168.2.5/30 10.11.12.13:443/31
 ```
 Depending on the fidelity of the network being scanned or the size of CIDR ranges, it may be expedient to adjust the scan timeout and the number of packets per second to send during the open port discovery phase. Several scanning options are available. See the options from the commandline help.
 
-### Generating pretty PDF report
+### Generating pretty PDF reports
 
 TLSAudit can now generate PDF reports of your scan to share with auditors or whoever may be interested in details of your server configuration.
 Use the `--report` command-line flag or the shorthand `-r`
