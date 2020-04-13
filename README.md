@@ -40,7 +40,7 @@ Use the `--report` command-line flag or the shorthand `-r`
 tlsaudit --report cloudflare.com:443
 ```
 
-This generates a report similar to the following: [cloudflare.pdf](https://github.com/adedayo/tlsaudit/cloudflare.pdf)
+This generates a report similar to the following: [cloudflare.pdf](https://github.com/adedayo/tlsaudit/blob/master/cloudflare.pdf)
 
 ### Command line options
 
