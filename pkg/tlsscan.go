@@ -261,7 +261,7 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 		result.ServerHelloMessageByProtocolByCipher = make(map[uint16]map[uint16]tlsmodel.ServerHelloMessage)
 		result.CertificatesPerProtocol = make(map[uint16]tlsmodel.CertificateMessage)
 		result.KeyExchangeByProtocolByCipher = make(map[uint16]map[uint16]tlsmodel.ServerKeyExchangeMsg)
-
+		result.CertificatesWithChainIssue = make(map[string]bool)
 		handshakeChannels := []<-chan ServerHelloAndCert{}
 		//check for protocol support with all ciphersuites present
 		for _, tlsVersion := range tlsdefs.TLSVersions {

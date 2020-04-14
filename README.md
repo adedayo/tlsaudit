@@ -52,7 +52,7 @@ Use the `--report` command-line flag or the shorthand `-r`
 tlsaudit --report cloudflare.com:443
 ```
 
-This generates a report similar to the following: [cloudflare.pdf](cloudflare.pdf)
+This generates a report similar to the following: [ecc384.badssl.com.pdf](ecc384.badssl.com.pdf)
 
 _Note that reporting requires that asciidoctor-pdf, which is used to generate the report, is installed on your machine._ Details of obtaining the free tool is here: [Asciidoctor PDF documentation](https://asciidoctor.org/docs/asciidoctor-pdf/)
 

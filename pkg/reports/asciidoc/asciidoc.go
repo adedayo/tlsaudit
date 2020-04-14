@@ -247,51 +247,6 @@ func createScanCharts(scans []tlsmodel.HumanScanResult) ([]string, []string) {
 
 	for _, s := range scans {
 
-		// graph := chart.BarChart{
-		// 	Width:  200,
-		// 	Height: 350,
-		// 	Canvas: chart.Style{
-		// 		Padding: chart.Box{
-		// 			Bottom: 50,
-		// 		},
-		// 	},
-		// 	XAxis: chart.Style{
-		// 		TextVerticalAlign: chart.TextVerticalAlignMiddle,
-		// 		// TextHorizontalAlign: chart.TextHorizontalAlignRight,
-		// 		TextRotationDegrees: -90,
-		// 		FontSize:            5,
-		// 	},
-		// 	Title: "Rating Breakdown",
-		// 	Background: chart.Style{
-		// 		Padding: chart.Box{
-		// 			Top: 40,
-		// 		},
-		// 	},
-		// 	BarWidth:   15,
-		// 	BarSpacing: 15,
-		// 	YAxis: chart.YAxis{
-		// 		Range: &chart.ContinuousRange{
-		// 			Max: 100,
-		// 			Min: 0,
-		// 		},
-		// 		ValueFormatter: func(v interface{}) string {
-		// 			if x, ok := v.(float64); ok {
-		// 				return fmt.Sprintf("%d", int64(x))
-		// 			}
-		// 			return fmt.Sprintf("%v", v)
-		// 		},
-		// 		Style: chart.Style{
-		// 			FontSize: 5,
-		// 		},
-		// 	},
-		// 	Bars: []chart.Value{
-		// 		{Value: float64(s.Score.CertificateScore), Style: styleScore(s.Score.CertificateScore), Label: "Certificate"},
-		// 		{Value: float64(s.Score.ProtocolScore), Style: styleScore(s.Score.ProtocolScore), Label: "Protocol Support"},
-		// 		{Value: float64(s.Score.KeyExchangeScore), Style: styleScore(s.Score.KeyExchangeScore), Label: "Key Exchange"},
-		// 		{Value: float64(s.Score.CipherEncryptionScore), Style: styleScore(s.Score.CipherEncryptionScore), Label: "Cipher Strength"},
-		// 	},
-		// }
-
 		barWidth := 20
 
 		graph := chart.StackedBarChart{

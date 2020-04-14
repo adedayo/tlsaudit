@@ -143,6 +143,7 @@ a!image::{{ .Grade }}[align=center, pdfwidth=1.0in]
 |OCSP Must Staple| {{ .OcspStapling }}
 |Certificate Version| {{ .Version }}
 |Chain Length | {{ len $certs }}
+|Has Chain Issues | {{ .HasChainIssue }}
 {{ range $i, $c := describeCerts $certs }}
 [small]#{{ $c }}#
 {{ end }}

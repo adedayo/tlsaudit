@@ -10,15 +10,20 @@ import (
 	"crypto/x509"
 	"encoding/gob"
 	"encoding/json"
+	"encoding/pem"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math/big"
+	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	tlsdefs "github.com/adedayo/tls-definitions"
+	"github.com/fullsailor/pkcs7"
 )
 
 var (
@@ -967,7 +972,8 @@ type ScanResult struct {
 	IsSSH                                  bool
 	SupportsTLSFallbackSCSV                bool
 	Score                                  SecurityScore
-	GroupID                                int //ScanRequest Host Group index
+	CertificatesWithChainIssue             map[string]bool //Cert Serial Number -> true
+	GroupID                                int             //ScanRequest Host Group index
 }
 
 //UnmarsharlScanResult builds ScanResults from bytes
@@ -1025,6 +1031,7 @@ type HumanCertificate struct {
 	RevocationDetail   string
 	Version            int
 	IsCA               bool
+	HasChainIssue      bool
 }
 
 func getCurve(protocol, cipher uint16, scan ScanResult) string {
@@ -1112,7 +1119,7 @@ func (s ScanResult) ToHumanScanResult() (out HumanScanResult) {
 			if key, ok := cert.PublicKey.(*rsa.PublicKey); ok {
 				certKey = fmt.Sprintf("%d bits (e %d)", key.N.BitLen(), key.E)
 			} else if key, ok := cert.PublicKey.(*ecdsa.PublicKey); ok {
-				certKey = fmt.Sprintf("EC %d bits", key.X.BitLen())
+				certKey = fmt.Sprintf("EC %d bits", key.Curve.Params().BitSize)
 			}
 
 			sigLen := len(cert.Signature) - 1
@@ -1121,6 +1128,11 @@ func (s ScanResult) ToHumanScanResult() (out HumanScanResult) {
 			if o, ok := s.OcspStaplingByProtocol[p]; ok {
 				ocsp = o
 			}
+			chainIssues := false
+			serial := fmt.Sprintf("%0x", cert.SerialNumber)
+			if _, present := s.CertificatesWithChainIssue[serial]; present {
+				chainIssues = true
+			}
 			out.CertificatesPerProtocol[tlsdefs.TLSVersionMap[p]] =
 				append(out.CertificatesPerProtocol[tlsdefs.TLSVersionMap[p]],
 					HumanCertificate{
@@ -1128,7 +1140,7 @@ func (s ScanResult) ToHumanScanResult() (out HumanScanResult) {
 						SubjectSerialNo:    cert.Subject.SerialNumber,
 						SubjectCN:          cert.Subject.CommonName,
 						SubjectAN:          strings.Join(cert.DNSNames, ", "),
-						SerialNumber:       fmt.Sprintf("%0x", cert.SerialNumber),
+						SerialNumber:       serial,
 						Issuer:             cert.Issuer.String(),
 						PublicKeyAlgorithm: cert.PublicKeyAlgorithm.String(),
 						ValidFrom:          cert.NotBefore.UTC().Format(time.RFC1123),
@@ -1140,6 +1152,7 @@ func (s ScanResult) ToHumanScanResult() (out HumanScanResult) {
 						RevocationDetail:   revokers(cert),
 						Version:            cert.Version,
 						IsCA:               cert.IsCA,
+						HasChainIssue:      chainIssues,
 					})
 
 		}
@@ -1301,12 +1314,91 @@ func scoreCertificate(score *SecurityScore, scan *ScanResult) {
 			Roots:         nil,
 			Intermediates: intermediates,
 		})
+
 		if err != nil {
-			cap(score, "T", "Fails common public CA verification. "+err.Error())
-			return
+			//may be chain issues, check
+			if hasChainIssuesButValid(certs[0]) {
+				serial := fmt.Sprintf("%0x", certs[0].SerialNumber)
+				scan.CertificatesWithChainIssue[serial] = true
+				score.Warnings = append(score.Warnings, fmt.Sprintf("Chain issues in certificate with serial number: %s", serial))
+			} else {
+				cap(score, "T", "Fails common public CA verification. "+err.Error())
+				return
+			}
 		}
 	}
 	score.CertificateScore = 100
+}
+
+func hasChainIssuesButValid(cert *x509.Certificate) bool {
+	if chain, err := fetchChain(cert); err == nil && len(chain) > 1 {
+		intermediates := x509.NewCertPool()
+		for _, cert := range chain[1:] {
+			intermediates.AddCert(cert)
+		}
+		_, err = chain[0].Verify(x509.VerifyOptions{
+			Roots:         nil,
+			Intermediates: intermediates,
+		})
+		if err == nil {
+			return true
+		}
+	}
+	return false
+}
+func fetchChain(cert *x509.Certificate) ([]*x509.Certificate, error) {
+	certs := []*x509.Certificate{cert}
+
+	for certs[len(certs)-1].IssuingCertificateURL != nil {
+		issuerCertURL := certs[len(certs)-1].IssuingCertificateURL[0]
+
+		response, err := http.Get(issuerCertURL)
+		if err != nil {
+			if response != nil {
+				response.Body.Close()
+			}
+			return nil, err
+		}
+		certData, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		issuerCert, err := decodeCert(certData)
+		if err != nil {
+			return nil, err
+		}
+
+		if issuerCert.CheckSignatureFrom(cert) == nil {
+			//root cert
+			break
+		}
+		certs = append(certs, issuerCert)
+	}
+
+	return certs, nil
+}
+
+func decodeCert(data []byte) (*x509.Certificate, error) {
+	if bytes.HasPrefix(data, []byte("-----BEGIN ")) {
+		block, _ := pem.Decode(data)
+		if block == nil || block.Type != "CERTIFICATE" {
+			return nil, errors.New("Invalid PEM Certificate")
+		}
+		data = block.Bytes
+	}
+
+	cert, err := x509.ParseCertificate(data)
+	if err == nil {
+		return cert, nil
+	}
+
+	//check whether it is pkcs7
+	pk, err := pkcs7.Parse(data)
+	if err == nil {
+		return pk.Certificates[0], nil
+	}
+	return nil, err
 }
 
 func scoreProtocol(protocol uint16) (score int) {
@@ -1406,7 +1498,7 @@ func adjustUsingCertificateSecurity(score *SecurityScore, scan ScanResult) {
 			case x509.ECDSA:
 				//See https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-57pt1r4.pdf for details pp 53 for comparable key strengths
 				if pk, ok := publicKey.(*ecdsa.PublicKey); ok {
-					bitlength := pk.X.BitLen()
+					bitlength := pk.Curve.Params().BitSize
 					switch {
 					case bitlength >= 224 && bitlength < 255:
 						cap(score, "B", fmt.Sprintf("ECDSA Public key length is %d (< 255)", bitlength))

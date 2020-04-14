@@ -200,7 +200,7 @@ func runner(cmd *cobra.Command, args []string) error {
 			Progress:         100,
 			Request: tlsmodel.AdvancedScanRequest{
 				Config: config,
-				ScanGroups: []tlsmodel.ScanGroup{tlsmodel.ScanGroup{
+				ScanGroups: []tlsmodel.ScanGroup{{
 					Description: fmt.Sprintf("A TLSAudit %s (https://github.com/adedayo/tlsaudit) scan", appVersion),
 					CIDRRanges:  args,
 				}},
