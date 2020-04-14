@@ -6,13 +6,13 @@
 # TLS Audit 
 TLS Audit is a *fast* utility for auditing TLS (including SSL and STARTTLS) security settings. You can use it to enumerate protocols, ciphers and curves supported by an open TCP port.
 
-* It combines port scanning with TLS Audits (disable port scanning with explicit port ranges)
+* It combines port scanning with TLS Audits (skip port scanning with explicit port ranges)
 * Supports auditing of STARTTLS servers, e.g. email servers
 * Unlike excellent tools like SSL Labs server test, you can use TLS Audit to scan servers internal to your network that are not exposed to the public Internet - Scan your server before exposing them: avoid "testing in production"!
 * Scan entire CIDR ranges with TLS Audit to discover which ports are open and get details of the TLS configurations of the open ports.
 * Supports bulk scanning of your servers natively 
 * You can scan specific port ranges within CIDR ranges too, by using a format such as `tlsaudit 10.10.5.0:443/24`, which scans the entire CIDR range `10.10.5.0/24` but looking only at port `443`. 
-  * When port ranges are specified, the prior port scan is disabled, and only the explicitly specified ranges are examined for SSL/STARTTLS/TLS configuration
+  * When port ranges are specified, the initial port scanning step is skipped and only the explicitly specified ranges are examined for SSL/STARTTLS/TLS configuration
 * Generate nice-looking reports for your audit and compliance efforts with the PDF reporting feature
 
 
