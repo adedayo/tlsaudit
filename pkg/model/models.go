@@ -1004,7 +1004,8 @@ type HumanScanResult struct {
 	SecureRenegotiationSupportedByProtocol map[string]bool
 	CipherSuiteByProtocol                  map[string][]string
 	// ServerHelloMessageByProtocolByCipher   map[string]map[string]ServerHelloMessage
-	CertificatesPerProtocol map[string][]HumanCertificate
+	CertificatesPerProtocol    map[string][]HumanCertificate
+	CertificatesWithChainIssue map[string]bool
 	// KeyExchangeByProtocolByCipher          map[string]map[string]ServerKeyExchangeMsg
 	IsSTARTLS               bool
 	IsSSH                   bool
@@ -1105,7 +1106,6 @@ func (s ScanResult) ToHumanScanResult() (out HumanScanResult) {
 		}
 		out.CipherSuiteByProtocol[tlsdefs.TLSVersionMap[k]] = ciphers
 	}
-
 	out.CertificatesPerProtocol = make(map[string][]HumanCertificate)
 	for p, c := range s.CertificatesPerProtocol {
 		certs, err := c.GetCertificates()
@@ -1157,6 +1157,7 @@ func (s ScanResult) ToHumanScanResult() (out HumanScanResult) {
 
 		}
 	}
+	out.CertificatesWithChainIssue = s.CertificatesWithChainIssue
 	out.IsSTARTLS = s.IsSTARTLS
 	out.IsSSH = s.IsSSH
 	out.SupportsTLSFallbackSCSV = s.SupportsTLSFallbackSCSV

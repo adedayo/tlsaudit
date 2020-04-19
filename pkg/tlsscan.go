@@ -38,7 +38,7 @@ func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) []tlsmodel.ScanResult 
 	scan := make(map[string]tlsmodel.ScanResult)
 	results := []<-chan tlsmodel.ScanResult{}
 	results = append(results, scanCIDRTLS(cidr, config))
-	for result := range MergeResultChannels(results...) {
+	for result := range mergeResultChannels(results...) {
 		key := result.Server + result.Port
 		if _, present := scan[key]; !present {
 			scan[key] = result
@@ -125,7 +125,7 @@ func scanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanRe
 						}
 					}
 				}
-				for res := range MergeResultChannels(resultChannels...) {
+				for res := range mergeResultChannels(resultChannels...) {
 					res.HostName = originalDomain
 					scanResults <- res
 				}
@@ -180,8 +180,8 @@ func mergeACKChannels(ackChannels ...<-chan portscan.PortACK) <-chan portscan.Po
 	return out
 }
 
-//MergeResultChannels as suggested
-func MergeResultChannels(channels ...<-chan tlsmodel.ScanResult) <-chan tlsmodel.ScanResult {
+//mergeResultChannels as suggested
+func mergeResultChannels(channels ...<-chan tlsmodel.ScanResult) <-chan tlsmodel.ScanResult {
 	var wg sync.WaitGroup
 	out := make(chan tlsmodel.ScanResult)
 	output := func(c <-chan tlsmodel.ScanResult) {
