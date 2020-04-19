@@ -438,11 +438,12 @@ func runTLSScan(ipSource func() []tlsmodel.GroupedHost, ipToHostnameResolver fun
 		}
 		counter := index + 1
 		scan := make(map[string]tlsmodel.ScanResult)
-		results := []<-chan tlsmodel.ScanResult{}
+		// results := []<-chan tlsmodel.ScanResult{}
 		scanResults := []tlsmodel.ScanResult{}
 		fmt.Printf("Scanning Host %s (%d of %d)\n", host, counter, count)
-		results = append(results, ScanCIDRTLS(host, psr.Request.Config))
-		for result := range MergeResultChannels(results...) {
+		for _, result := range ScanCIDRTLS(host, psr.Request.Config) {
+			// results = append(results, ScanCIDRTLS(host, psr.Request.Config))
+			// for result := range MergeResultChannels(results...) {
 			key := result.Server + result.Port
 			if _, present := scan[key]; !present {
 				scan[key] = result

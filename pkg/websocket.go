@@ -148,9 +148,10 @@ func RealtimeAdvancedScan(w http.ResponseWriter, req *http.Request) {
 						}
 						position := counter
 						scan := make(map[string]tlsmodel.ScanResult)
-						results := []<-chan tlsmodel.ScanResult{}
-						results = append(results, ScanCIDRTLS(host.Domain, request.Config))
-						for result := range MergeResultChannels(results...) {
+						for _, result := range ScanCIDRTLS(host.Domain, request.Config) {
+							// results := []<-chan tlsmodel.ScanResult{}
+							// results = append(results, ScanCIDRTLS(host.Domain, request.Config))
+							// for result := range MergeResultChannels(results...) {
 							key := result.Server + result.Port
 							result.GroupID = ghi
 							if _, present := scan[key]; !present {

@@ -164,14 +164,21 @@ func runner(cmd *cobra.Command, args []string) error {
 	}
 	start := time.Now()
 	for _, host := range args {
-		results := []<-chan tlsmodel.ScanResult{}
-		results = append(results, tlsaudit.ScanCIDRTLS(host, config))
-		for result := range tlsaudit.MergeResultChannels(results...) {
+
+		for _, result := range tlsaudit.ScanCIDRTLS(host, config) {
 			key := result.Server + result.Port
 			if _, present := scan[key]; !present {
 				scan[key] = result
 			}
 		}
+		// results := []tlsmodel.ScanResult{}
+		// results = append(results, tlsaudit.ScanCIDRTLS(host, config))
+		// for result := range tlsaudit.MergeResultChannels(results...) {
+		// 	key := result.Server + result.Port
+		// 	if _, present := scan[key]; !present {
+		// 		scan[key] = result
+		// 	}
+		// }
 		processedIPs += len(cidr.Expand(host))
 		if !config.Quiet {
 			fmt.Printf("Finished scan of %s. Progress %f%% %d hosts of a total of %d in %f seconds\n",

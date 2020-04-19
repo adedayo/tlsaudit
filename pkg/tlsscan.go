@@ -33,7 +33,29 @@ type orderedCipherStruct struct {
 
 //ScanCIDRTLS combines a port scan with TLS scan for a CIDR range to return the open ports, and the TLS setting for each port over the result channel
 //If port ranges are specified, will not do a port scan to discover open ports
-func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanResult {
+func ScanCIDRTLS(cidr string, config tlsmodel.ScanConfig) []tlsmodel.ScanResult {
+
+	scan := make(map[string]tlsmodel.ScanResult)
+	results := []<-chan tlsmodel.ScanResult{}
+	results = append(results, scanCIDRTLS(cidr, config))
+	for result := range MergeResultChannels(results...) {
+		key := result.Server + result.Port
+		if _, present := scan[key]; !present {
+			scan[key] = result
+		}
+	}
+
+	out := []tlsmodel.ScanResult{}
+	for _, v := range scan {
+		out = append(out, v)
+	}
+	return out
+}
+
+//scanCIDRTLS combines a port scan with TLS scan for a CIDR range to return the open ports, and the TLS setting for each port over the result channel
+//If port ranges are specified, will not do a port scan to discover open ports
+//This is the internal channel-based implementation
+func scanCIDRTLS(cidr string, config tlsmodel.ScanConfig) <-chan tlsmodel.ScanResult {
 	scanResults := make(chan tlsmodel.ScanResult)
 	defer func() {
 		if r := recover(); r != nil {
