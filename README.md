@@ -49,7 +49,7 @@ TLSAudit can now generate PDF reports of your scan to share with auditors or who
 Use the `--report` command-line flag or the shorthand `-r`
 
 ```bash
-tlsaudit --report cloudflare.com:443
+tlsaudit --report ecc384.badssl.com:443
 ```
 
 This generates a report similar to the following: [ecc384.badssl.com.pdf](ecc384.badssl.com.pdf)
