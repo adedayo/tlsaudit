@@ -968,7 +968,7 @@ type ScanResult struct {
 	ServerHelloMessageByProtocolByCipher   map[uint16]map[uint16]ServerHelloMessage
 	CertificatesPerProtocol                map[uint16]CertificateMessage
 	KeyExchangeByProtocolByCipher          map[uint16]map[uint16]ServerKeyExchangeMsg
-	IsSTARTLS                              bool
+	IsSTARTTLS                             bool
 	IsSSH                                  bool
 	SupportsTLSFallbackSCSV                bool
 	Score                                  SecurityScore
@@ -1007,7 +1007,7 @@ type HumanScanResult struct {
 	CertificatesPerProtocol    map[string][]HumanCertificate
 	CertificatesWithChainIssue map[string]bool
 	// KeyExchangeByProtocolByCipher          map[string]map[string]ServerKeyExchangeMsg
-	IsSTARTLS               bool
+	IsSTARTTLS              bool
 	IsSSH                   bool
 	SupportsTLSFallbackSCSV bool
 	Score                   SecurityScore
@@ -1158,7 +1158,7 @@ func (s ScanResult) ToHumanScanResult() (out HumanScanResult) {
 		}
 	}
 	out.CertificatesWithChainIssue = s.CertificatesWithChainIssue
-	out.IsSTARTLS = s.IsSTARTLS
+	out.IsSTARTTLS = s.IsSTARTTLS
 	out.IsSSH = s.IsSSH
 	out.SupportsTLSFallbackSCSV = s.SupportsTLSFallbackSCSV
 	out.Score = s.CalculateScore()
@@ -1210,7 +1210,7 @@ func (s ScanResult) ToString(config ScanConfig) (result string) {
 		sort.Slice(sortedSupportedProtocols, func(i, j int) bool { return sortedSupportedProtocols[i] > sortedSupportedProtocols[j] })
 		for _, tls := range sortedSupportedProtocols {
 			startTLS := ""
-			if s.IsSTARTLS {
+			if s.IsSTARTTLS {
 				startTLS = " (STARTTLS)"
 			}
 			result += fmt.Sprintf("\t%s%s:\n", tlsdefs.TLSVersionMap[tls], startTLS)

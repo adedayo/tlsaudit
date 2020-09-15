@@ -535,7 +535,7 @@ func generateCipherTable(scan tlsmodel.HumanScanResult) (out string) {
 		temp += fmt.Sprintf(`| 3+| pass:a[<color rgb="{blue}">Has a cipher preference order: %t</color>] `, scan.HasCipherPreferenceOrderByProtocol[proto])
 		temp += fmt.Sprintf("2+h|Cipher h| Bits h| Grade ")
 		startTLS := ""
-		if scan.IsSTARTLS {
+		if scan.IsSTARTTLS {
 			startTLS = " (STARTTLS)"
 		}
 		if ordered, present := scan.HasCipherPreferenceOrderByProtocol[proto]; present {

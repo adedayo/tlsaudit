@@ -326,7 +326,7 @@ func generateResultText(r tlsmodel.ScanResult, currentServerInput string) (resul
 		protocols = strings.Join(supported, ", ")
 	}
 	startTLS := ""
-	if r.IsSTARTLS {
+	if r.IsSTARTTLS {
 		startTLS = "(STARTTLS)"
 	}
 	result += fmt.Sprintf(format2, r.Port, r.SupportsTLS(), startTLS, protocols)

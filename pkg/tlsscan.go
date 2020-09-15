@@ -326,7 +326,7 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 			outChannels := []<-chan tlsmodel.HelloAndKey{}
 			for _, tlsVersion := range result.SupportedProtocols {
 				for _, cipher := range tlsdefs.AllCipherSuites {
-					out := testConnection(hostnameWithPort, tlsVersion, cipher, result.IsSTARTLS, serverName)
+					out := testConnection(hostnameWithPort, tlsVersion, cipher, result.IsSTARTTLS, serverName)
 					outChannels = append(outChannels, out)
 				}
 			}
@@ -336,98 +336,37 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 			orderedCipherChannels := make([]<-chan orderedCipherStruct, len(result.SupportedProtocols))
 			for ind, tlsVersion := range result.SupportedProtocols {
 				result.CipherSuiteByProtocol[tlsVersion] = makeUnique(result.CipherSuiteByProtocol[tlsVersion])
+				sort.Sort(uint16Sorter(result.CipherSuiteByProtocol[tlsVersion]))
 				oChan := func() chan orderedCipherStruct {
 					outOrdered := make(chan orderedCipherStruct)
 					go func(tlsVer uint16) {
 						defer close(outOrdered)
-						sort.Sort(uint16Sorter(result.CipherSuiteByProtocol[tlsVer]))
 						ciphers := result.CipherSuiteByProtocol[tlsVer]
 						preference := false
+						initialCipherCount := len(ciphers)
+						orderedCiphers := []uint16{}
 						cipherCount := len(ciphers)
-						nextCipher := 0
-						orderedCiphers := make([]uint16, cipherCount)
-
-					CheckPoint:
-						cipherCount = len(ciphers)
-						if cipherCount == 1 {
+						if initialCipherCount == 1 && cipherCount == 1 {
 							//single cipher is assumed to support ordering ;-)
 							preference = true
+							orderedCiphers = append(orderedCiphers, ciphers[0])
 						} else {
-							config := getTLSConfig(tlsVer)
-							config.CipherSuites = ciphers
-							if serverName != "" {
-								config.ServerName = serverName
-							}
-							msg, err := HandShakeClientHello(hostnameWithPort, config, result.IsSTARTLS, defaultTimeout)
-							if err == nil {
-								//reverse the ciphers
-								reverseCiphers := make([]uint16, cipherCount)
-								for i := cipherCount - 1; i >= 0; i-- {
-									reverseCiphers[cipherCount-i-1] = ciphers[i]
-								}
-								config.CipherSuites = reverseCiphers
-								msg2, err := HandShakeClientHello(hostnameWithPort, config, result.IsSTARTLS, defaultTimeout)
-								if err == nil && msg.CipherSuite == msg2.CipherSuite {
-									//if on reverse we get the same cipher, then there is a server preference
-									preference = true
-									orderedCiphers[nextCipher] = msg.CipherSuite
-									nextCipher++
-									cipherCount = len(reverseCiphers) - 1
-									retryCount := 0
-									maxRetries := 2 * cipherCount
-									for cipherCount >= 2 {
-										ciphers = make([]uint16, cipherCount)
-										next := 0
-										for _, c := range reverseCiphers {
-											if c != msg.CipherSuite && len(ciphers) > next {
-												ciphers[next] = c
-												next++
-											}
-										}
-										config.CipherSuites = ciphers
-										reverseCiphers = ciphers
-										cipherCount = len(reverseCiphers) - 1
-										msg2, err = HandShakeClientHello(hostnameWithPort, config, result.IsSTARTLS, defaultTimeout)
-										if err == nil {
-											msg = msg2
-											orderedCiphers[nextCipher] = msg.CipherSuite
-											nextCipher++
-										} else {
-											retryCount++
-											if retryCount > maxRetries {
-												//assume server does not support order
-												preference = false
-												break //stop trying
-											}
-										}
-									}
-									//Last two ciphers - add the cipher that was not preferred
-									if preference {
-										for _, c := range reverseCiphers {
-											if c != msg.CipherSuite {
-												orderedCiphers[nextCipher] = c
-												nextCipher++
-											}
-										}
-									}
-								} else {
-									//0xCCA8: "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256" causes problems for the cipher ordering check. Exclude and redo if present
-									if msg.CipherSuite == 0xcca8 || msg2.CipherSuite == 0xcca8 {
-										ciphers2 := []uint16{}
-										for _, c := range ciphers {
-											if c != 0xcca8 {
-												ciphers2 = append(ciphers2, c)
-											}
-										}
-										ciphers = ciphers2
-										orderedCiphers[nextCipher] = 0xcca8
-										nextCipher++
-										goto CheckPoint
-									}
-								}
-							}
-						}
 
+							reverse := reverseUint16Slice(ciphers)
+							var selected uint16
+							for len(ciphers) > 1 {
+								preference, selected, ciphers, reverse = checkCipherPreference(tlsVer, ciphers, reverse, serverName, hostnameWithPort, result.IsSTARTTLS)
+								if !preference {
+									break
+								}
+								orderedCiphers = append(orderedCiphers, selected)
+							}
+							//add the last cipher
+							if len(ciphers) > 0 {
+								orderedCiphers = append(orderedCiphers, ciphers[0])
+							}
+
+						}
 						outOrdered <- orderedCipherStruct{
 							Protocol:   tlsVer,
 							Preference: preference,
@@ -450,6 +389,51 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 		resultChannel <- result
 	}()
 	return resultChannel
+}
+
+func checkCipherPreference(tlsVersion uint16, ciphers, reverse []uint16, serverName, hostnameWithPort string, isStartTLS bool) (hasPreference bool,
+	selectedCipher uint16, residueCiphers, residueReverse []uint16) {
+
+	config := getTLSConfig(tlsVersion)
+	config.CipherSuites = ciphers
+	if serverName != "" {
+		config.ServerName = serverName
+	}
+	if msg, err := HandShakeClientHello(hostnameWithPort, config, isStartTLS, defaultTimeout); err == nil {
+		config.CipherSuites = reverse
+		if msg2, err2 := HandShakeClientHello(hostnameWithPort, config, isStartTLS, defaultTimeout); err2 == nil {
+			if msg.CipherSuite == msg2.CipherSuite {
+				newCiphers := []uint16{}
+				newReverseCiphers := []uint16{}
+				for _, c := range ciphers {
+					if c != msg.CipherSuite {
+						newCiphers = append(newCiphers, c)
+					}
+				}
+				for _, c := range reverse {
+					if c != msg.CipherSuite {
+						newReverseCiphers = append(newReverseCiphers, c)
+					}
+				}
+				return true, msg.CipherSuite, newCiphers, newReverseCiphers
+			}
+		}
+	}
+	//error or non-equal selected cipher is interpreted as no cipher preference
+	return
+}
+
+func sortUint16Slice(data *[]uint16) {
+	sort.Sort(uint16Sorter(*data))
+}
+
+func reverseUint16Slice(data []uint16) []uint16 {
+	out := make([]uint16, len(data))
+	length := len(data) - 1
+	for i, c := range data {
+		out[length-i] = c
+	}
+	return out
 }
 
 func checkFallbackSCSVSupport(result *tlsmodel.ScanResult, hostnameWithPort, serverName string, patientTimeout time.Duration) {
@@ -558,7 +542,7 @@ func process(res ServerHelloAndCert, result *tlsmodel.ScanResult) {
 		result.SecureRenegotiationSupportedByProtocol[msg.Vers] = msg.SecureRenegotiationSupported
 		result.SelectedCipherByProtocol[msg.Vers] = c
 		result.CipherSuiteByProtocol[msg.Vers] = append(result.CipherSuiteByProtocol[msg.Vers], c)
-		result.IsSTARTLS = res.StartTLS
+		result.IsSTARTTLS = res.StartTLS
 		result.ALPNByProtocol[msg.Vers] = msg.AlpnProtocol
 		result.CertificatesPerProtocol[msg.Vers] = res.Cert
 		if msg.Vers == tls.VersionTLS13 {
@@ -608,19 +592,19 @@ func processECDHCipher(hk tlsmodel.HelloAndKey, result *tlsmodel.ScanResult) {
 	}
 }
 
-func fixedLength(data string, length int, delim string) string {
-	raws := []string{}
-	runes := []rune{}
-	for i, r := range []rune(data) {
-		runes = append(runes, r)
-		if (i+1)%length == 0 {
-			raws = append(raws, string(runes))
-			runes = []rune{}
-		}
-	}
-	raws = append(raws, string(runes))
-	return strings.Join(raws, delim)
-}
+// func fixedLength(data string, length int, delim string) string {
+// 	raws := []string{}
+// 	runes := []rune{}
+// 	for i, r := range []rune(data) {
+// 		runes = append(runes, r)
+// 		if (i+1)%length == 0 {
+// 			raws = append(raws, string(runes))
+// 			runes = []rune{}
+// 		}
+// 	}
+// 	raws = append(raws, string(runes))
+// 	return strings.Join(raws, delim)
+// }
 
 func testConnection(hostnameWithPort string, tlsVersion, cipher uint16, startTLS bool, serverName string) <-chan tlsmodel.HelloAndKey {
 	out := make(chan tlsmodel.HelloAndKey)

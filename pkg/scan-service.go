@@ -147,7 +147,7 @@ func getTLSProtocols(w http.ResponseWriter, req *http.Request) {
 					Hostname:  d.HostName,
 					Protocols: d.SupportedProtocols,
 					IP:        d.Server,
-					STARTTLS:  d.IsSTARTLS,
+					STARTTLS:  d.IsSTARTTLS,
 					Score:     d.Score,
 				})
 			}
@@ -448,7 +448,7 @@ func runTLSScan(ipSource func() []tlsmodel.GroupedHost, ipToHostnameResolver fun
 			if _, present := scan[key]; !present {
 				scan[key] = result
 				scanResults = append(scanResults, result)
-				println("Got result for ", result.Server, ipToHostnameResolver(result.Server), result.Port, result.SupportsTLS(), result.IsSTARTLS, fmt.Sprintf("%#v", result.SupportedProtocols))
+				println("Got result for ", result.Server, ipToHostnameResolver(result.Server), result.Port, result.SupportsTLS(), result.IsSTARTTLS, fmt.Sprintf("%#v", result.SupportedProtocols))
 			}
 		}
 		sort.Sort(tlsmodel.ScanResultSorter(scanResults))
