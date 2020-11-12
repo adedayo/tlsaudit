@@ -894,6 +894,7 @@ type ServerHelloMessage struct {
 	ServerShare                  KeyShare
 	SelectedIdentityPresent      bool
 	SelectedIdentity             uint16
+	SupportedPoints              []uint8
 
 	// HelloRetryRequest extensions
 	cookie        []byte

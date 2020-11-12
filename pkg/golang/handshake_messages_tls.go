@@ -547,6 +547,7 @@ func (m *serverHelloMsg) Export() tlsmodel.ServerHelloMessage {
 		ServerShare:                  tlsmodel.KeyShare{Group: tlsmodel.CurveID(m.serverShare.group), Data: m.serverShare.data},
 		SelectedIdentityPresent:      m.selectedIdentityPresent,
 		SelectedIdentity:             m.selectedIdentity,
+		SupportedPoints:              m.supportedPoints,
 		// RawHello:                     m,
 	}
 

@@ -5,6 +5,7 @@
 package gotls
 
 import (
+	"bytes"
 	"container/list"
 	"crypto"
 	"crypto/rand"
@@ -155,13 +156,19 @@ const (
 	certTypeECDSASign = 64 // RFC 4492, Section 5.5
 )
 
-// Signature algorithms (for internal signaling use). Starting at 16 to avoid overlap with
+// Signature algorithms (for internal signaling use). Starting at 225 to avoid overlap with
 // TLS 1.2 codepoints (RFC 5246, Appendix A.4.1), with which these have nothing to do.
 const (
-	signaturePKCS1v15 uint8 = iota + 16
-	signatureECDSA
+	signaturePKCS1v15 uint8 = iota + 225
 	signatureRSAPSS
+	signatureECDSA
+	signatureEd25519
 )
+
+// directSigning is a standard Hash value that signals that no pre-hashing
+// should be performed, and that the input should be signed directly. It is the
+// hash function associated with the Ed25519 signature scheme.
+var directSigning crypto.Hash = 0
 
 // supportedSignatureAlgorithms contains the signature and hash algorithms that
 // the code advertises as supported in a TLS 1.2+ ClientHello and in a TLS 1.2+
@@ -200,6 +207,10 @@ const (
 	downgradeCanaryTLS12 = "DOWNGRD\x01"
 	downgradeCanaryTLS11 = "DOWNGRD\x00"
 )
+
+// testingOnlyForceDowngradeCanary is set in tests to force the server side to
+// include downgrade canaries even if it's using its highers supported version.
+var testingOnlyForceDowngradeCanary bool
 
 // ConnectionState records basic TLS details about the connection.
 type ConnectionState struct {
@@ -268,6 +279,8 @@ type ClientSessionState struct {
 	serverCertificates []*x509.Certificate   // Certificate chain presented by the server
 	verifiedChains     [][]*x509.Certificate // Certificate chains we built for verification
 	receivedAt         time.Time             // When the session ticket was received from the server
+	ocspResponse       []byte                // Stapled OCSP response presented by the server
+	scts               [][]byte              // SCTs presented by the server
 
 	// TLS 1.3 fields.
 	nonce  []byte    // Ticket nonce sent by the server, to derive PSK
@@ -313,13 +326,16 @@ const (
 	ECDSAWithP384AndSHA384 SignatureScheme = 0x0503
 	ECDSAWithP521AndSHA512 SignatureScheme = 0x0603
 
+	// EdDSA algorithms.
+	Ed25519 SignatureScheme = 0x0807
+
 	// Legacy signature and hash algorithms for TLS 1.2.
 	PKCS1WithSHA1 SignatureScheme = 0x0201
 	ECDSAWithSHA1 SignatureScheme = 0x0203
 )
 
 // ClientHelloInfo contains information from a ClientHello message in order to
-// guide certificate selection in the GetCertificate callback.
+// guide application logic in the GetCertificate and GetConfigForClient callbacks.
 type ClientHelloInfo struct {
 	// CipherSuites lists the CipherSuites supported by the client (e.g.
 	// TLS_AES_128_GCM_SHA256, TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256).
@@ -363,6 +379,10 @@ type ClientHelloInfo struct {
 	// from, or write to, this connection; that will cause the TLS
 	// connection to fail.
 	Conn net.Conn
+
+	// config is embedded by the GetCertificate or GetConfigForClient caller,
+	// for use with SupportsCertificate.
+	config *Config
 }
 
 // CertificateRequestInfo contains information from a server's
@@ -378,6 +398,9 @@ type CertificateRequestInfo struct {
 	// SignatureSchemes lists the signature schemes that the server is
 	// willing to verify.
 	SignatureSchemes []SignatureScheme
+
+	// Version is the TLS version that was negotiated for this connection.
+	Version uint16
 }
 
 // RenegotiationSupport enumerates the different levels of support for TLS
@@ -424,19 +447,26 @@ type Config struct {
 	// If Time is nil, TLS uses time.Now.
 	Time func() time.Time
 
-	// Certificates contains one or more certificate chains to present to
-	// the other side of the connection. Server configurations must include
-	// at least one certificate or else set GetCertificate. Clients doing
-	// client-authentication may set either Certificates or
-	// GetClientCertificate.
+	// Certificates contains one or more certificate chains to present to the
+	// other side of the connection. The first certificate compatible with the
+	// peer's requirements is selected automatically.
+	//
+	// Server configurations must set one of Certificates, GetCertificate or
+	// GetConfigForClient. Clients doing client-authentication may set either
+	// Certificates or GetClientCertificate.
+	//
+	// Note: if there are multiple Certificates, and they don't have the
+	// optional field Leaf set, certificate selection will incur a significant
+	// per-handshake performance cost.
 	Certificates []Certificate
 
 	// NameToCertificate maps from a certificate name to an element of
 	// Certificates. Note that a certificate name can be of the form
 	// '*.example.com' and so doesn't have to be a domain name as such.
-	// See Config.BuildNameToCertificate
-	// The nil value causes the first element of Certificates to be used
-	// for all connections.
+	//
+	// Deprecated: NameToCertificate only allows associating a single
+	// certificate with a given name. Leave this field nil to let the library
+	// select the first compatible chain from Certificates.
 	NameToCertificate map[string]*Certificate
 
 	// GetCertificate returns a Certificate based on the given
@@ -445,7 +475,7 @@ type Config struct {
 	//
 	// If GetCertificate is nil or returns nil, then the certificate is
 	// retrieved from NameToCertificate. If NameToCertificate is nil, the
-	// first element of Certificates will be used.
+	// best element of Certificates will be used.
 	GetCertificate func(*ClientHelloInfo) (*Certificate, error)
 
 	// GetClientCertificate, if not nil, is called when a server requests a
@@ -472,15 +502,10 @@ type Config struct {
 	// If GetConfigForClient is nil, the Config passed to Server() will be
 	// used for all connections.
 	//
-	// Uniquely for the fields in the returned Config, session ticket keys
-	// will be duplicated from the original Config if not set.
-	// Specifically, if SetSessionTicketKeys was called on the original
-	// config but not on the returned config then the ticket keys from the
-	// original config will be copied into the new config before use.
-	// Otherwise, if SessionTicketKey was set in the original config but
-	// not in the returned config then it will be copied into the returned
-	// config before use. If neither of those cases applies then the key
-	// material from the returned config will be used for session tickets.
+	// If SessionTicketKey was explicitly set on the returned Config, or if
+	// SetSessionTicketKeys was called on the returned Config, those keys will
+	// be used. Otherwise, the original Config keys will be used (and possibly
+	// rotated if they are automatically managed).
 	GetConfigForClient func(*ClientHelloInfo) (*Config, error)
 
 	// VerifyPeerCertificate, if not nil, is called after normal
@@ -495,6 +520,16 @@ type Config struct {
 	// RequestClientCert or RequireAnyClientCert, then this callback will
 	// be considered but the verifiedChains argument will always be nil.
 	VerifyPeerCertificate func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
+
+	// VerifyConnection, if not nil, is called after normal certificate
+	// verification and after VerifyPeerCertificate by either a TLS client
+	// or server. If it returns a non-nil error, the handshake is aborted
+	// and that error results.
+	//
+	// If normal verification fails then the handshake will abort before
+	// considering this callback. This callback will run for all connections
+	// regardless of InsecureSkipVerify or ClientAuth settings.
+	VerifyConnection func(ConnectionState) error
 
 	// RootCAs defines the set of root certificate authorities
 	// that clients use when verifying server certificates.
@@ -520,12 +555,12 @@ type Config struct {
 	// by the policy in ClientAuth.
 	ClientCAs *x509.CertPool
 
-	// InsecureSkipVerify controls whether a client verifies the
-	// server's certificate chain and host name.
-	// If InsecureSkipVerify is true, TLS accepts any certificate
-	// presented by the server and any host name in that certificate.
-	// In this mode, TLS is susceptible to man-in-the-middle attacks.
-	// This should be used only for testing.
+	// InsecureSkipVerify controls whether a client verifies the server's
+	// certificate chain and host name. If InsecureSkipVerify is true, crypto/tls
+	// accepts any certificate presented by the server and any host name in that
+	// certificate. In this mode, TLS is susceptible to machine-in-the-middle
+	// attacks unless custom verification is used. This should be used only for
+	// testing or in combination with VerifyConnection or VerifyPeerCertificate.
 	InsecureSkipVerify bool
 
 	// CipherSuites is a list of supported cipher suites for TLS versions up to
@@ -550,22 +585,22 @@ type Config struct {
 	// See RFC 5077 and the PSK mode of RFC 8446. If zero, it will be filled
 	// with random data before the first server handshake.
 	//
-	// If multiple servers are terminating connections for the same host
-	// they should all have the same SessionTicketKey. If the
-	// SessionTicketKey leaks, previously recorded and future TLS
-	// connections using that key might be compromised.
+	// Deprecated: if this field is left at zero, session ticket keys will be
+	// automatically rotated every day and dropped after seven days. For
+	// customizing the rotation schedule or synchronizing servers that are
+	// terminating connections for the same host, use SetSessionTicketKeys.
 	SessionTicketKey [32]byte
 
 	// ClientSessionCache is a cache of ClientSessionState entries for TLS
 	// session resumption. It is only used by clients.
 	ClientSessionCache ClientSessionCache
 
-	// MinVersion contains the minimum SSL/TLS version that is acceptable.
-	// If zero, then TLS 1.0 is taken as the minimum.
+	// MinVersion contains the minimum TLS version that is acceptable.
+	// If zero, TLS 1.0 is currently taken as the minimum.
 	MinVersion uint16
 
-	// MaxVersion contains the maximum SSL/TLS version that is acceptable.
-	// If zero, then the maximum version supported by this package is used,
+	// MaxVersion contains the maximum TLS version that is acceptable.
+	// If zero, the maximum version supported by this package is used,
 	// which is currently TLS 1.3.
 	MaxVersion uint16
 
@@ -593,20 +628,32 @@ type Config struct {
 	// used for debugging.
 	KeyLogWriter io.Writer
 
-	serverInitOnce sync.Once // guards calling (*Config).serverInit
-
-	// mutex protects sessionTicketKeys.
+	// mutex protects sessionTicketKeys and autoSessionTicketKeys.
 	mutex sync.RWMutex
-	// sessionTicketKeys contains zero or more ticket keys. If the length
-	// is zero, SessionTicketsDisabled must be true. The first key is used
-	// for new tickets and any subsequent keys can be used to decrypt old
-	// tickets.
+	// sessionTicketKeys contains zero or more ticket keys. If set, it means the
+	// the keys were set with SessionTicketKey or SetSessionTicketKeys. The
+	// first key is used for new tickets and any subsequent keys can be used to
+	// decrypt old tickets. The slice contents are not protected by the mutex
+	// and are immutable.
 	sessionTicketKeys []ticketKey
+	// autoSessionTicketKeys is like sessionTicketKeys but is owned by the
+	// auto-rotation logic. See Config.ticketKeys.
+	autoSessionTicketKeys []ticketKey
 }
 
-// ticketKeyNameLen is the number of bytes of identifier that is prepended to
-// an encrypted session ticket in order to identify the key used to encrypt it.
-const ticketKeyNameLen = 16
+const (
+	// ticketKeyNameLen is the number of bytes of identifier that is prepended to
+	// an encrypted session ticket in order to identify the key used to encrypt it.
+	ticketKeyNameLen = 16
+
+	// ticketKeyLifetime is how long a ticket key remains valid and can be used to
+	// resume a client connection.
+	ticketKeyLifetime = 7 * 24 * time.Hour // 7 days
+
+	// ticketKeyRotation is how often the server should rotate the session ticket key
+	// that is used for new tickets.
+	ticketKeyRotation = 24 * time.Hour
+)
 
 // ticketKey is the internal representation of a session ticket key.
 type ticketKey struct {
@@ -615,6 +662,8 @@ type ticketKey struct {
 	keyName [ticketKeyNameLen]byte
 	aesKey  [16]byte
 	hmacKey [16]byte
+	// created is the time at which this ticket key was created. See Config.ticketKeys.
+	created time.Time
 }
 
 // ticketKeyFromBytes converts from the external representation of a session
@@ -628,6 +677,18 @@ func ticketKeyFromBytes(b [32]byte) (key ticketKey) {
 	return key
 }
 
+// ticketKeyFromBytes converts from the external representation of a session
+// ticket key to a ticketKey. Externally, session ticket keys are 32 random
+// bytes and this function expands that into sufficient name and key material.
+func (c *Config) ticketKeyFromBytes(b [32]byte) (key ticketKey) {
+	hashed := sha512.Sum512(b[:])
+	copy(key.keyName[:], hashed[:ticketKeyNameLen])
+	copy(key.aesKey[:], hashed[ticketKeyNameLen:ticketKeyNameLen+16])
+	copy(key.hmacKey[:], hashed[ticketKeyNameLen+16:ticketKeyNameLen+32])
+	key.created = c.time()
+	return key
+}
+
 // maxSessionTicketLifetime is the maximum allowed lifetime of a TLS 1.3 session
 // ticket, and the lifetime we set for tickets we send.
 const maxSessionTicketLifetime = 7 * 24 * time.Hour
@@ -637,13 +698,15 @@ const maxSessionTicketLifetime = 7 * 24 * time.Hour
 func (c *Config) Clone() *Config {
 	// Running serverInit ensures that it's safe to read
 	// SessionTicketsDisabled.
-	c.serverInitOnce.Do(func() { c.serverInit(nil) })
+	// c.serverInitOnce.Do(func() { c.serverInit(nil) })
 
-	var sessionTicketKeys []ticketKey
+	// var sessionTicketKeys []ticketKey
+	// c.mutex.RLock()
+	// // sessionTicketKeys = c.sessionTicketKeys
+	// c.mutex.RUnlock()
+
 	c.mutex.RLock()
-	sessionTicketKeys = c.sessionTicketKeys
-	c.mutex.RUnlock()
-
+	defer c.mutex.RUnlock()
 	return &Config{
 		Rand:                        c.Rand,
 		Time:                        c.Time,
@@ -653,6 +716,7 @@ func (c *Config) Clone() *Config {
 		GetClientCertificate:        c.GetClientCertificate,
 		GetConfigForClient:          c.GetConfigForClient,
 		VerifyPeerCertificate:       c.VerifyPeerCertificate,
+		VerifyConnection:            c.VerifyConnection,
 		RootCAs:                     c.RootCAs,
 		NextProtos:                  c.NextProtos,
 		ServerName:                  c.ServerName,
@@ -670,51 +734,141 @@ func (c *Config) Clone() *Config {
 		DynamicRecordSizingDisabled: c.DynamicRecordSizingDisabled,
 		Renegotiation:               c.Renegotiation,
 		KeyLogWriter:                c.KeyLogWriter,
-		sessionTicketKeys:           sessionTicketKeys,
+		sessionTicketKeys:           c.sessionTicketKeys,
+		autoSessionTicketKeys:       c.autoSessionTicketKeys,
 	}
 }
 
 // serverInit is run under c.serverInitOnce to do initialization of c. If c was
 // returned by a GetConfigForClient callback then the argument should be the
 // Config that was passed to Server, otherwise it should be nil.
-func (c *Config) serverInit(originalConfig *Config) {
-	if c.SessionTicketsDisabled || len(c.ticketKeys()) != 0 {
+// func (c *Config) serverInit(originalConfig *Config) {
+// 	if c.SessionTicketsDisabled || len(c.ticketKeys()) != 0 {
+// 		return
+// 	}
+
+// 	alreadySet := false
+// 	for _, b := range c.SessionTicketKey {
+// 		if b != 0 {
+// 			alreadySet = true
+// 			break
+// 		}
+// 	}
+
+// 	if !alreadySet {
+// 		if originalConfig != nil {
+// 			copy(c.SessionTicketKey[:], originalConfig.SessionTicketKey[:])
+// 		} else if _, err := io.ReadFull(c.rand(), c.SessionTicketKey[:]); err != nil {
+// 			c.SessionTicketsDisabled = true
+// 			return
+// 		}
+// 	}
+
+// 	if originalConfig != nil {
+// 		originalConfig.mutex.RLock()
+// 		c.sessionTicketKeys = originalConfig.sessionTicketKeys
+// 		originalConfig.mutex.RUnlock()
+// 	} else {
+// 		c.sessionTicketKeys = []ticketKey{ticketKeyFromBytes(c.SessionTicketKey)}
+// 	}
+// }
+
+// deprecatedSessionTicketKey is set as the prefix of SessionTicketKey if it was
+// randomized for backwards compatibility but is not in use.
+var deprecatedSessionTicketKey = []byte("DEPRECATED")
+
+// initLegacySessionTicketKeyRLocked ensures the legacy SessionTicketKey field is
+// randomized if empty, and that sessionTicketKeys is populated from it otherwise.
+func (c *Config) initLegacySessionTicketKeyRLocked() {
+	// Don't write if SessionTicketKey is already defined as our deprecated string,
+	// or if it is defined by the user but sessionTicketKeys is already set.
+	if c.SessionTicketKey != [32]byte{} &&
+		(bytes.HasPrefix(c.SessionTicketKey[:], deprecatedSessionTicketKey) || len(c.sessionTicketKeys) > 0) {
 		return
 	}
 
-	alreadySet := false
-	for _, b := range c.SessionTicketKey {
-		if b != 0 {
-			alreadySet = true
-			break
+	// We need to write some data, so get an exclusive lock and re-check any conditions.
+	c.mutex.RUnlock()
+	defer c.mutex.RLock()
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	if c.SessionTicketKey == [32]byte{} {
+		if _, err := io.ReadFull(c.rand(), c.SessionTicketKey[:]); err != nil {
+			panic(fmt.Sprintf("tls: unable to generate random session ticket key: %v", err))
 		}
+		// Write the deprecated prefix at the beginning so we know we created
+		// it. This key with the DEPRECATED prefix isn't used as an actual
+		// session ticket key, and is only randomized in case the application
+		// reuses it for some reason.
+		copy(c.SessionTicketKey[:], deprecatedSessionTicketKey)
+	} else if !bytes.HasPrefix(c.SessionTicketKey[:], deprecatedSessionTicketKey) && len(c.sessionTicketKeys) == 0 {
+		c.sessionTicketKeys = []ticketKey{c.ticketKeyFromBytes(c.SessionTicketKey)}
 	}
 
-	if !alreadySet {
-		if originalConfig != nil {
-			copy(c.SessionTicketKey[:], originalConfig.SessionTicketKey[:])
-		} else if _, err := io.ReadFull(c.rand(), c.SessionTicketKey[:]); err != nil {
-			c.SessionTicketsDisabled = true
-			return
-		}
-	}
-
-	if originalConfig != nil {
-		originalConfig.mutex.RLock()
-		c.sessionTicketKeys = originalConfig.sessionTicketKeys
-		originalConfig.mutex.RUnlock()
-	} else {
-		c.sessionTicketKeys = []ticketKey{ticketKeyFromBytes(c.SessionTicketKey)}
-	}
 }
 
-func (c *Config) ticketKeys() []ticketKey {
+// ticketKeys returns the ticketKeys for this connection.
+// If configForClient has explicitly set keys, those will
+// be returned. Otherwise, the keys on c will be used and
+// may be rotated if auto-managed.
+// During rotation, any expired session ticket keys are deleted from
+// c.sessionTicketKeys. If the session ticket key that is currently
+// encrypting tickets (ie. the first ticketKey in c.sessionTicketKeys)
+// is not fresh, then a new session ticket key will be
+// created and prepended to c.sessionTicketKeys.
+func (c *Config) ticketKeys(configForClient *Config) []ticketKey {
+	// If the ConfigForClient callback returned a Config with explicitly set
+	// keys, use those, otherwise just use the original Config.
+	if configForClient != nil {
+		configForClient.mutex.RLock()
+		if configForClient.SessionTicketsDisabled {
+			return nil
+		}
+		configForClient.initLegacySessionTicketKeyRLocked()
+		if len(configForClient.sessionTicketKeys) != 0 {
+			ret := configForClient.sessionTicketKeys
+			configForClient.mutex.RUnlock()
+			return ret
+		}
+		configForClient.mutex.RUnlock()
+	}
+
 	c.mutex.RLock()
-	// c.sessionTicketKeys is constant once created. SetSessionTicketKeys
-	// will only update it by replacing it with a new value.
-	ret := c.sessionTicketKeys
+	defer c.mutex.RUnlock()
+	if c.SessionTicketsDisabled {
+		return nil
+	}
+	c.initLegacySessionTicketKeyRLocked()
+	if len(c.sessionTicketKeys) != 0 {
+		return c.sessionTicketKeys
+	}
+	// Fast path for the common case where the key is fresh enough.
+	if len(c.autoSessionTicketKeys) > 0 && c.time().Sub(c.autoSessionTicketKeys[0].created) < ticketKeyRotation {
+		return c.autoSessionTicketKeys
+	}
+
+	// autoSessionTicketKeys are managed by auto-rotation.
 	c.mutex.RUnlock()
-	return ret
+	defer c.mutex.RLock()
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	// Re-check the condition in case it changed since obtaining the new lock.
+	if len(c.autoSessionTicketKeys) == 0 || c.time().Sub(c.autoSessionTicketKeys[0].created) >= ticketKeyRotation {
+		var newKey [32]byte
+		if _, err := io.ReadFull(c.rand(), newKey[:]); err != nil {
+			panic(fmt.Sprintf("unable to generate random session ticket key: %v", err))
+		}
+		valid := make([]ticketKey, 0, len(c.autoSessionTicketKeys)+1)
+		valid = append(valid, c.ticketKeyFromBytes(newKey))
+		for _, k := range c.autoSessionTicketKeys {
+			// While rotating the current key, also remove any expired ones.
+			if c.time().Sub(k.created) < ticketKeyLifetime {
+				valid = append(valid, k)
+			}
+		}
+		c.autoSessionTicketKeys = valid
+	}
+	return c.autoSessionTicketKeys
 }
 
 // SetSessionTicketKeys updates the session ticket keys for a server. The first
@@ -769,7 +923,7 @@ var supportedVersions = []uint16{
 	VersionSSL30,
 }
 
-func (c *Config) supportedVersions(isClient bool) []uint16 {
+func (c *Config) supportedVersions() []uint16 {
 	versions := make([]uint16, 0, len(supportedVersions))
 	for _, v := range supportedVersions {
 		if c != nil && c.MinVersion != 0 && v < c.MinVersion {
@@ -778,17 +932,6 @@ func (c *Config) supportedVersions(isClient bool) []uint16 {
 		if c != nil && c.MaxVersion != 0 && v > c.MaxVersion {
 			continue
 		}
-		//--dayo we don't want this behaviour
-		// TLS 1.0 is the minimum version supported as a client.
-		// if isClient && v < VersionTLS10 {
-		// 	continue
-		// }
-
-		//--dayo we don't want this either
-		// TLS 1.3 is opt-in in Go 1.12.
-		// if v == VersionTLS13 && !isTLS13Supported() {
-		// 	continue
-		// }
 		versions = append(versions, v)
 	}
 	return versions
@@ -832,8 +975,8 @@ func goDebugString(key string) string {
 	return ""
 }
 
-func (c *Config) maxSupportedVersion(isClient bool) uint16 {
-	supportedVersions := c.supportedVersions(isClient)
+func (c *Config) maxSupportedVersion() uint16 {
+	supportedVersions := c.supportedVersions()
 	if len(supportedVersions) == 0 {
 		return 0
 	}
@@ -863,10 +1006,19 @@ func (c *Config) curvePreferences() []CurveID {
 	return c.CurvePreferences
 }
 
+func (c *Config) supportsCurve(curve CurveID) bool {
+	for _, cc := range c.curvePreferences() {
+		if cc == curve {
+			return true
+		}
+	}
+	return false
+}
+
 // mutualVersion returns the protocol version to use given the advertised
 // versions of the peer. Priority is given to the peer preference order.
-func (c *Config) mutualVersion(isClient bool, peerVersions []uint16) (uint16, bool) {
-	supportedVersions := c.supportedVersions(isClient)
+func (c *Config) mutualVersion(peerVersions []uint16) (uint16, bool) {
+	supportedVersions := c.supportedVersions()
 	for _, peerVersion := range peerVersions {
 		for _, v := range supportedVersions {
 			if v == peerVersion {
@@ -876,6 +1028,8 @@ func (c *Config) mutualVersion(isClient bool, peerVersions []uint16) (uint16, bo
 	}
 	return 0, false
 }
+
+var errNoCertificates = errors.New("tls: no certificates configured")
 
 // getCertificate returns the best certificate for the given ClientHelloInfo,
 // defaulting to the first element of c.Certificates.

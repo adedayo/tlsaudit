@@ -5,8 +5,10 @@
 package gotls
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rsa"
 	"encoding/asn1"
@@ -125,6 +127,75 @@ var signaturePadding = []byte{
 	0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
 }
 
+// legacyTypeAndHashFromPublicKey returns the fixed signature type and crypto.Hash for
+// a given public key used with TLS 1.0 and 1.1, before the introduction of
+// signature algorithm negotiation.
+func legacyTypeAndHashFromPublicKey(pub crypto.PublicKey) (sigType uint8, hash crypto.Hash, err error) {
+	switch pub.(type) {
+	case *rsa.PublicKey:
+		return signaturePKCS1v15, crypto.MD5SHA1, nil
+	case *ecdsa.PublicKey:
+		return signatureECDSA, crypto.SHA1, nil
+	case ed25519.PublicKey:
+		// RFC 8422 specifies support for Ed25519 in TLS 1.0 and 1.1,
+		// but it requires holding on to a handshake transcript to do a
+		// full signature, and not even OpenSSL bothers with the
+		// complexity, so we can't even test it properly.
+		return 0, 0, fmt.Errorf("tls: Ed25519 public keys are not supported before TLS 1.2")
+	default:
+		return 0, 0, fmt.Errorf("tls: unsupported public key: %T", pub)
+	}
+}
+
+// signedMessage returns the pre-hashed (if necessary) message to be signed by
+// certificate keys in TLS 1.3. See RFC 8446, Section 4.4.3.
+func signedMessage(sigHash crypto.Hash, context string, transcript hash.Hash) []byte {
+	if sigHash == directSigning {
+		b := &bytes.Buffer{}
+		b.Write(signaturePadding)
+		io.WriteString(b, context)
+		b.Write(transcript.Sum(nil))
+		return b.Bytes()
+	}
+	h := sigHash.New()
+	h.Write(signaturePadding)
+	io.WriteString(h, context)
+	h.Write(transcript.Sum(nil))
+	return h.Sum(nil)
+}
+
+// typeAndHashFromSignatureScheme returns the corresponding signature type and
+// crypto.Hash for a given TLS SignatureScheme.
+func typeAndHashFromSignatureScheme(signatureAlgorithm SignatureScheme) (sigType uint8, hash crypto.Hash, err error) {
+	switch signatureAlgorithm {
+	case PKCS1WithSHA1, PKCS1WithSHA256, PKCS1WithSHA384, PKCS1WithSHA512:
+		sigType = signaturePKCS1v15
+	case PSSWithSHA256, PSSWithSHA384, PSSWithSHA512:
+		sigType = signatureRSAPSS
+	case ECDSAWithSHA1, ECDSAWithP256AndSHA256, ECDSAWithP384AndSHA384, ECDSAWithP521AndSHA512:
+		sigType = signatureECDSA
+	case Ed25519:
+		sigType = signatureEd25519
+	default:
+		return 0, 0, fmt.Errorf("unsupported signature algorithm: %v", signatureAlgorithm)
+	}
+	switch signatureAlgorithm {
+	case PKCS1WithSHA1, ECDSAWithSHA1:
+		hash = crypto.SHA1
+	case PKCS1WithSHA256, PSSWithSHA256, ECDSAWithP256AndSHA256:
+		hash = crypto.SHA256
+	case PKCS1WithSHA384, PSSWithSHA384, ECDSAWithP384AndSHA384:
+		hash = crypto.SHA384
+	case PKCS1WithSHA512, PSSWithSHA512, ECDSAWithP521AndSHA512:
+		hash = crypto.SHA512
+	case Ed25519:
+		hash = directSigning
+	default:
+		return 0, 0, fmt.Errorf("unsupported signature algorithm: %v", signatureAlgorithm)
+	}
+	return sigType, hash, nil
+}
+
 // writeSignedMessage writes the content to be signed by certificate keys in TLS
 // 1.3 to sigHash. See RFC 8446, Section 4.4.3.
 func writeSignedMessage(sigHash io.Writer, context string, transcript hash.Hash) {
@@ -186,6 +257,29 @@ func signatureSchemesForCertificate(version uint16, cert *Certificate) []Signatu
 	default:
 		return nil
 	}
+}
+
+// selectSignatureScheme picks a SignatureScheme from the peer's preference list
+// that works with the selected certificate. It's only called for protocol
+// versions that support signature algorithms, so TLS 1.2 and 1.3.
+func selectSignatureScheme(vers uint16, c *Certificate, peerAlgs []SignatureScheme) (SignatureScheme, error) {
+	supportedAlgs := signatureSchemesForCertificate(vers, c)
+	if len(supportedAlgs) == 0 {
+		return 0, unsupportedCertificateError(c)
+	}
+	if len(peerAlgs) == 0 && vers == VersionTLS12 {
+		// For TLS 1.2, if the client didn't send signature_algorithms then we
+		// can assume that it supports SHA1. See RFC 5246, Section 7.4.1.4.1.
+		peerAlgs = []SignatureScheme{PKCS1WithSHA1, ECDSAWithSHA1}
+	}
+	// Pick signature scheme in the peer's preference order, as our
+	// preference order is not configurable.
+	for _, preferredAlg := range peerAlgs {
+		if isSupportedSignatureAlgorithm(preferredAlg, supportedAlgs) {
+			return preferredAlg, nil
+		}
+	}
+	return 0, errors.New("tls: peer doesn't support any of the certificate's signature algorithms")
 }
 
 // unsupportedCertificateError returns a helpful error for certificates with

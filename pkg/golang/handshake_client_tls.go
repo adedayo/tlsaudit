@@ -36,7 +36,7 @@ func MakeClientHello(config *Config) (*clientHelloMsg, ecdheParameters, error) {
 		return nil, nil, errors.New("tls: NextProtos values too large")
 	}
 
-	supportedVersions := config.supportedVersions(true)
+	supportedVersions := config.supportedVersions()
 	if len(supportedVersions) == 0 {
 		return nil, nil, errors.New("tls: no supported versions satisfy MinVersion and MaxVersion")
 	}

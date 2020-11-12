@@ -308,35 +308,28 @@ func (h finishedHash) serverSum(masterSecret []byte) []byte {
 	return out
 }
 
-// hashForClientCertificate returns a digest over the handshake messages so far,
-// suitable for signing by a TLS client certificate.
-func (h finishedHash) hashForClientCertificate(sigType uint8, hashAlg crypto.Hash, masterSecret []byte) ([]byte, error) {
-	if (h.version == VersionSSL30 || h.version >= VersionTLS12) && h.buffer == nil {
-		panic("a handshake hash for a client-certificate was requested after discarding the handshake buffer")
+// hashForClientCertificate returns the handshake messages so far, pre-hashed if
+// necessary, suitable for signing by a TLS client certificate.
+func (h finishedHash) hashForClientCertificate(sigType uint8, hashAlg crypto.Hash, masterSecret []byte) []byte {
+	if (h.version >= VersionTLS12 || sigType == signatureEd25519) && h.buffer == nil {
+		panic("tls: handshake hash for a client certificate requested after discarding the handshake buffer")
 	}
 
-	if h.version == VersionSSL30 {
-		if sigType != signaturePKCS1v15 {
-			return nil, errors.New("tls: unsupported signature type for client certificate")
-		}
-
-		md5Hash := md5.New()
-		md5Hash.Write(h.buffer)
-		sha1Hash := sha1.New()
-		sha1Hash.Write(h.buffer)
-		return finishedSum30(md5Hash, sha1Hash, masterSecret, nil), nil
+	if sigType == signatureEd25519 {
+		return h.buffer
 	}
+
 	if h.version >= VersionTLS12 {
 		hash := hashAlg.New()
 		hash.Write(h.buffer)
-		return hash.Sum(nil), nil
+		return hash.Sum(nil)
 	}
 
 	if sigType == signatureECDSA {
-		return h.server.Sum(nil), nil
+		return h.server.Sum(nil)
 	}
 
-	return h.Sum(), nil
+	return h.Sum()
 }
 
 // discardHandshakeBuffer is called when there is no more need to

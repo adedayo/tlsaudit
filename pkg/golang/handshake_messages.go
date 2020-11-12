@@ -6,7 +6,9 @@ package gotls
 
 import (
 	"fmt"
+
 	"golang.org/x/crypto/cryptobyte"
+
 	// "internal/x/crypto/cryptobyte"
 	"strings"
 )
@@ -617,6 +619,7 @@ type serverHelloMsg struct {
 	serverShare                  keyShare
 	selectedIdentityPresent      bool
 	selectedIdentity             uint16
+	supportedPoints              []uint8
 
 	// HelloRetryRequest extensions
 	cookie        []byte
@@ -644,16 +647,6 @@ func (m *serverHelloMsg) marshal() []byte {
 		bWithoutExtensions := *b
 
 		b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) {
-			if m.nextProtoNeg {
-				b.AddUint16(extensionNextProtoNeg)
-				b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) {
-					for _, proto := range m.nextProtos {
-						b.AddUint8LengthPrefixed(func(b *cryptobyte.Builder) {
-							b.AddBytes([]byte(proto))
-						})
-					}
-				})
-			}
 			if m.ocspStapling {
 				b.AddUint16(extensionStatusRequest)
 				b.AddUint16(0) // empty extension_data
@@ -726,6 +719,14 @@ func (m *serverHelloMsg) marshal() []byte {
 				b.AddUint16(extensionKeyShare)
 				b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) {
 					b.AddUint16(uint16(m.selectedGroup))
+				})
+			}
+			if len(m.supportedPoints) > 0 {
+				b.AddUint16(extensionSupportedPoints)
+				b.AddUint16LengthPrefixed(func(b *cryptobyte.Builder) {
+					b.AddUint8LengthPrefixed(func(b *cryptobyte.Builder) {
+						b.AddBytes(m.supportedPoints)
+					})
 				})
 			}
 

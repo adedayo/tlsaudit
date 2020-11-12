@@ -550,6 +550,7 @@ func process(res ServerHelloAndCert, result *tlsmodel.ScanResult) {
 				Key:   msg.ServerShare.Data,
 				Group: msg.ServerShare.Group,
 			}
+			// fmt.Printf("TLS 1.3: %#v\nKX: %#v\n", msg, kx)
 			if k, ok := result.KeyExchangeByProtocolByCipher[msg.Vers]; ok {
 				k[c] = kx
 				result.KeyExchangeByProtocolByCipher[msg.Vers] = k
