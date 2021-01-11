@@ -33,7 +33,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"sort"
@@ -215,7 +214,8 @@ func runner(cmd *cobra.Command, args []string) error {
 		}
 		paths, err := asciidoc.GenerateReport(summary, results, appVersion)
 		if err != nil {
-			log.Fatal(err)
+			fmt.Printf("\nError: %s%s\n", err.Error(), paths)
+			return err
 		}
 
 		println("Report: ", paths)

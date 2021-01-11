@@ -2,6 +2,7 @@ package asciidoc
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -103,11 +104,18 @@ func makeAdvisory(example tlsmodel.GradeExample) []string {
 	return advisories
 }
 
-//GenerateReport creates a PDF report from the scan result returning the path to the document
+//GenerateReport creates a PDF report from the scan result returning the path to the document. It uses asciidoc-pdf, if not found, returns the JSON-formatted results in the reportPath
 func GenerateReport(summary tlsmodel.ScanResultSummary, results []tlsmodel.HumanScanResult, version string) (reportPath string, err error) {
 	asciidocPath, err := exec.LookPath(asciidocExec)
 	if err != nil {
-		return reportPath, fmt.Errorf("Cannot generate PDF report because %s executable file not found in your $PATH. Install it and ensure that it is in your $PATH", asciidocExec)
+		issuesJSON, e := json.MarshalIndent(results, "", " ")
+		error2 := ""
+		if e != nil {
+			error2 = fmt.Sprintf("\n%s", e.Error())
+		} else {
+			reportPath = fmt.Sprintf("\n\nPrinting JSON instead\n\n%s", string(issuesJSON))
+		}
+		return reportPath, fmt.Errorf("%s executable file not found in your $PATH. Install it and ensure that it is in your $PATH%s", asciidocExec, error2)
 	}
 
 	rr := []scanResult{}
