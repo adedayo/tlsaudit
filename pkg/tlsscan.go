@@ -293,7 +293,7 @@ func scanHost(hostPort tlsmodel.HostAndPort, config tlsmodel.ScanConfig, serverN
 				if serverName != "" {
 					config.ServerName = serverName
 				}
-				handshakeChan := HandShakeClientHelloGetServerCert(hostnameWithPort, config, patientTimeout)
+				handshakeChan := handShakeClientHelloGetServerCert(hostnameWithPort, config, patientTimeout)
 				return handshakeChan
 			}(tlsVersion)
 			handshakeChannels = append(handshakeChannels, hsc)

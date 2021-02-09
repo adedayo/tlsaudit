@@ -14,6 +14,7 @@ import (
 func HandShakeUpToKeyExchange(hostname string, config *gotls.Config, startTLS bool, timeout time.Duration) (tlsmodel.HelloAndKey, error) {
 	hk := tlsmodel.HelloAndKey{}
 	serverHello := tlsmodel.ServerHelloMessage{}
+	_, port, _ := net.SplitHostPort(hostname)
 	c := &gotls.Conn{}
 	if startTLS {
 		rawConn2, err := net.DialTimeout("tcp", hostname, timeout)
@@ -22,7 +23,7 @@ func HandShakeUpToKeyExchange(hostname string, config *gotls.Config, startTLS bo
 		}
 		defer rawConn2.Close()
 		rawConn2.SetDeadline(time.Now().Add(timeout))
-		err = checkAndSetupForStartTLS(rawConn2)
+		err = checkAndSetupForStartTLS(rawConn2, port)
 		if err != nil {
 			return hk, err
 		}
@@ -66,7 +67,7 @@ func HandShakeClientHello(hostname string, config *gotls.Config, startTLS bool, 
 	serverHello := tlsmodel.ServerHelloMessage{}
 	// dialer := new(net.Dialer)
 	c := &gotls.Conn{}
-
+	_, port, _ := net.SplitHostPort(hostname)
 	if startTLS {
 		// dialer := new(net.Dialer)
 		rawConn2, err := net.DialTimeout("tcp", hostname, timeout)
@@ -75,7 +76,7 @@ func HandShakeClientHello(hostname string, config *gotls.Config, startTLS bool, 
 		}
 		defer rawConn2.Close()
 		rawConn2.SetDeadline(time.Now().Add(timeout))
-		err = checkAndSetupForStartTLS(rawConn2)
+		err = checkAndSetupForStartTLS(rawConn2, port)
 		if err != nil {
 			return serverHello, err
 		}
@@ -106,8 +107,8 @@ func HandShakeClientHello(hostname string, config *gotls.Config, startTLS bool, 
 	return serverHello, err
 }
 
-// HandShakeClientHelloGetServerCert sends client hello and gets Server Hello and Certificates
-func HandShakeClientHelloGetServerCert(hostname string, config *gotls.Config, timeout time.Duration) <-chan ServerHelloAndCert {
+// handShakeClientHelloGetServerCert sends client hello and gets Server Hello and Certificates
+func handShakeClientHelloGetServerCert(hostname string, config *gotls.Config, timeout time.Duration) <-chan ServerHelloAndCert {
 	hs := make(chan ServerHelloAndCert)
 	go func() {
 		defer close(hs)
@@ -145,7 +146,8 @@ func HandShakeClientHelloGetServerCert(hostname string, config *gotls.Config, ti
 			}
 			defer rawConn2.Close()
 			rawConn2.SetDeadline(time.Now().Add(timeout))
-			err = checkAndSetupForStartTLS(rawConn2)
+			_, port, _ := net.SplitHostPort(hostname)
+			err = checkAndSetupForStartTLS(rawConn2, port)
 			if err != nil {
 				hs <- ServerHelloAndCert{ServerHello: serverHello, Cert: certs, Err: err}
 			}
@@ -177,8 +179,60 @@ func HandShakeClientHelloGetServerCert(hostname string, config *gotls.Config, ti
 	return hs
 }
 
-//Test whether connection is STARTTLS
-func checkAndSetupForStartTLS(rawConn net.Conn) error {
+//Test whether connection is STARTTLS - check POP3/IMAP/SMTP based on common ports
+func checkAndSetupForStartTLS(rawConn net.Conn, port string) error {
+	switch port {
+	case "110", "995": //pop3
+		return pop3(rawConn)
+	case "25", "587", "2525", "465": //smtp
+		return smtp(rawConn)
+	case "143", "993": //imap
+		return imap(rawConn)
+	default:
+		return smtp(rawConn)
+	}
+}
+
+func pop3(rawConn net.Conn) (err error) {
+	//https://tools.ietf.org/html/rfc2595#section-4
+	pop := textproto.NewConn(rawConn)
+	if text, err := pop.ReadLine(); err == nil {
+		text = strings.ToUpper(text)
+		if strings.Contains(text, "OK") && strings.Contains(text, "POP") {
+			if _, err = pop.Cmd("STLS"); err == nil {
+				if text, err = pop.ReadLine(); err == nil {
+					text = strings.ToUpper(text)
+					if strings.Contains(text, "OK") && strings.Contains(text, "TLS") {
+						return nil
+					}
+				}
+			}
+		}
+	}
+	return err
+}
+
+func imap(rawConn net.Conn) (err error) {
+	//https://tools.ietf.org/html/rfc2595#section-3.1
+	pop := textproto.NewConn(rawConn)
+	text, err := pop.ReadLine()
+	if err == nil {
+		text = strings.ToUpper(text)
+		if strings.Contains(text, "OK") && strings.Contains(text, "STARTTLS") {
+			if _, err = pop.Cmd("a1 STARTTLS"); err == nil {
+				if text, err = pop.ReadLine(); err == nil {
+					text = strings.ToUpper(text)
+					if strings.Contains(text, "OK") && strings.Contains(text, "TLS") {
+						return nil
+					}
+				}
+			}
+		}
+	}
+	return err
+}
+
+func smtp(rawConn net.Conn) error {
 	smtp := textproto.NewConn(rawConn)
 	_, _, err := smtp.ReadResponse(220)
 	if err != nil {

@@ -253,9 +253,8 @@ func createScanCharts(scans []tlsmodel.HumanScanResult) ([]string, []string) {
 		}
 	}
 
+	barWidth := 20
 	for _, s := range scans {
-
-		barWidth := 20
 
 		graph := chart.StackedBarChart{
 			Title: "Rating Breakdown",
