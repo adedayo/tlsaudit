@@ -27,8 +27,13 @@ before:
   hooks:
     - go mod download
 brews:
-  - github:
+  - tap:
       owner: adedayo
       name: homebrew-tap
+    commit_author:
+      name: "Dayo Adetoye"
+      email: dayo.dev@gmail.com
+    caveats: "To get help running TLS Audit please run: tlsaudit --help "
     homepage: "https://github.com/adedayo/tlsaudit"
     description: "tlsaudit is a utility for auditing TLS (including SSL and STARTTLS) security settings. You can use it to enumerate protocols, ciphers and curves supported by an open TCP port."
+    license: "BSD-3-Clause"
