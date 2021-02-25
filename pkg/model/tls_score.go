@@ -6,7 +6,7 @@ func score2009p(s *ScanResult) (result SecurityScore) {
 		adjustScore2009p(&result, *s)
 	} else {
 		//No TLS
-		result.Grade = toTLSGrade(-1)
+		result.Grade = toTLSGrade(-1, strengthMetadata{})
 	}
 	return
 }
@@ -17,7 +17,7 @@ func score2009q(s *ScanResult) (result SecurityScore) {
 		adjustScore2009q(&result, *s)
 	} else {
 		//No TLS
-		result.Grade = toTLSGrade(-1)
+		result.Grade = toTLSGrade(-1, strengthMetadata{})
 	}
 	return
 }
@@ -66,12 +66,12 @@ func computeBasicScore(s *ScanResult) (result SecurityScore) {
 	result.KeyExchangeScore = (keyExchangeMaxScore + keyExchangeMinScore) / 2
 
 	result.CipherEncryptionScore = (cipherStrengthMaxScore + cipherStrengthMinScore) / 2
-
+	var meta strengthMetadata
 	if result.ProtocolScore*result.KeyExchangeScore*result.CipherEncryptionScore == 0 {
 		//if any of the three protocol, key exchange or cipher encryption score is zero, then zero the result
-		result.Grade = toTLSGrade(0)
+		result.Grade = toTLSGrade(0, meta)
 	} else {
-		result.Grade = toTLSGrade((30*result.ProtocolScore + 30*result.KeyExchangeScore + 40*result.CipherEncryptionScore) / 100)
+		result.Grade = toTLSGrade((30*result.ProtocolScore+30*result.KeyExchangeScore+40*result.CipherEncryptionScore)/100, meta)
 	}
 
 	scoreCertificate(&result, s)

@@ -1656,12 +1656,20 @@ func supportsAEAD(scan ScanResult) bool {
 }
 
 //see https://github.com/ssllabs/research/wiki/SSL-Server-Rating-Guide
-func toTLSGrade(score int) (grade string) {
+func toTLSGrade(score int, meta strengthMetadata) (grade string) {
 	switch {
 	case score >= 80:
-		grade = "A"
+		if meta.forwardSecret == "" || meta.weak != "" {
+			grade = "B"
+		} else {
+			grade = "A"
+		}
 	case score >= 65:
-		grade = "B"
+		if meta.forwardSecret == "" || meta.weak != "" {
+			grade = "C"
+		} else {
+			grade = "B"
+		}
 	case score >= 50:
 		grade = "C"
 	case score >= 35:
@@ -1751,9 +1759,21 @@ func scoreCipher(cipher, protocol uint16, scan ScanResult) (score string) {
 		}
 		s := (30*mapEncKeyLengthToScore(cc.GetEncryptionKeyLength()) + 30*fsScore +
 			40*mapKeyExchangeKeylengthToScore(cc.GetKeyExchangeKeyLength(cipher, protocol, scan))) / 100
-		return fmt.Sprintf("%d bits, %s%sGrade %s", cc.GetEncryptionKeyLength(), fs, annotateWeak(cc), toTLSGrade(s))
+
+		meta := strengthMetadata{
+			keyLength:     s,
+			weak:          annotateWeak(cc),
+			forwardSecret: fs,
+		}
+		return fmt.Sprintf("%d bits, %s%sGrade %s", cc.GetEncryptionKeyLength(), fs, meta.weak, toTLSGrade(s, meta))
 	}
 	return
+}
+
+type strengthMetadata struct {
+	keyLength     int
+	weak          string
+	forwardSecret string
 }
 
 func annotateWeak(cc CipherConfig) string {
